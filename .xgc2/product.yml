@@ -1,7 +1,7 @@
 schema: xgc2.product.v1
 id: libxgc2-adapter-runtime-client-dev
 name: XGC2 Adapter Runtime C++ SDK
-version: 0.6.0-4
+version: 0.6.0-5
 kind: toolchain-apt
 summary: Generic C++ SDK for capability-first XGC2 AdapterRuntimeLink sessions, generated
   protocol bindings, fencing, dispatch, and flow control.
@@ -56,6 +56,6 @@ release:
   dependency_policy:
     xgc2-protobuf: rebuild
   apt_versions:
-    focal: 0.6.0-4~focal
-    jammy: 0.6.0-4~jammy
-    noble: 0.6.0-4~noble
+    focal: 0.6.0-5~focal
+    jammy: 0.6.0-5~jammy
+    noble: 0.6.0-5~noble
