@@ -123,7 +123,7 @@ for distribution in "${distributions[@]}"; do
     exit 1
   fi
 done
-grep -q '^version: 0.6.0-1$' "${metadata}"
+grep -q '^version: 0.6.0-2$' "${metadata}"
 grep -q '^project(xgc2_adapter_runtime_client VERSION 0.6.0 LANGUAGES CXX)$' \
   CMakeLists.txt
 grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_MAJOR 0$' \
