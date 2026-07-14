@@ -1,0 +1,127 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check package contract
+        run: |
+          set -euo pipefail
+          git diff --check HEAD
+          ./.xgc2/scripts/check_package_compliance.sh
+
+  cpp14-focal:
+    name: Focal C++14 integration and quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test against Focal system gRPC/protobuf
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -w /work \
+            ubuntu:20.04 \
+            bash -lc '
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              ./.xgc2/scripts/install_protobuf_dependency.sh focal
+              apt-get install -y --no-install-recommends \
+                build-essential clang-format cmake cppcheck \
+                libgrpc++-dev libgtest-dev libprotobuf-dev libre2-dev \
+                pkg-config protobuf-compiler protobuf-compiler-grpc
+              ./.xgc2/scripts/check_cpp_quality.sh
+            '
+
+  deb-build-and-smoke:
+    needs: package-compliance
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            image: ubuntu:20.04
+            distribution: focal
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            image: ubuntu:20.04
+            distribution: focal
+          - architecture: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            image: ubuntu:22.04
+            distribution: jammy
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            image: ubuntu:22.04
+            distribution: jammy
+          - architecture: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            image: ubuntu:24.04
+            distribution: noble
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            image: ubuntu:24.04
+            distribution: noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Deb and exercise installed consumer
+        run: |
+          set -euo pipefail
+          install -d .ci/build-manifests
+          docker run --rm \
+            --platform "${{ matrix.platform }}" \
+            -e PACKAGE_DISTRIBUTION="${{ matrix.distribution }}" \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -w /work \
+            "${{ matrix.image }}" \
+            bash -lc '
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              ./.xgc2/scripts/install_protobuf_dependency.sh "${PACKAGE_DISTRIBUTION}"
+              apt-get install -y --no-install-recommends \
+                build-essential cmake dpkg-dev fakeroot file \
+                libgrpc++-dev libprotobuf-dev libre2-dev pkg-config \
+                protobuf-compiler protobuf-compiler-grpc
+              ./.xgc2/scripts/build_deb.sh
+              apt-get install -y ./debs/libxgc2-adapter-link-client-dev_*.deb
+              ./.xgc2/scripts/smoke_test_installed.sh
+            '
+          product_version="$(awk -F': *' '/^version:/ {print $2; exit}' .xgc2/product.yml)"
+          python3 .xgc2/scripts/xgc2_artifact_manifest.py build \
+            --deb-dir debs \
+            --output-dir .ci/build-manifests \
+            --product libxgc2-adapter-link-client-dev \
+            --product-version "${product_version}" \
+            --distribution "${{ matrix.distribution }}" \
+            --architecture "${{ matrix.architecture }}" \
+            --source-sha "${GITHUB_SHA}" \
+            --ci-run-id "${GITHUB_RUN_ID}" \
+            --ci-workflow "${GITHUB_WORKFLOW}" \
+            --ci-workflow-ref "${GITHUB_WORKFLOW_REF}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adapter-link-client-${{ matrix.distribution }}-${{ matrix.architecture }}
+          path: |
+            debs/*.deb
+            .ci/build-manifests/*.json
+          retention-days: 14
+          include-hidden-files: true

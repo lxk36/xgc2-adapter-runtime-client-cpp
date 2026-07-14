@@ -1,0 +1,152 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_version:
+        description: Expected .xgc2/product.yml version
+        required: true
+        type: string
+      expected_source_sha:
+        description: Expected immutable source commit
+        required: true
+        type: string
+      prepare_action:
+        required: false
+        default: release
+        type: choice
+        options: [release, compatibility-verify]
+      apt_overlay_url:
+        description: Optional release-train staging APT base URL
+        required: false
+        default: ""
+        type: string
+      dependency_set_digest:
+        description: SHA256 of the release-train dependency set
+        required: false
+        default: ""
+        type: string
+      run_cpp_quality:
+        required: true
+        default: false
+        type: boolean
+      run_source_tests:
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  XGC2_APT_OVERLAY_URL: ${{ inputs.apt_overlay_url }}
+  XGC2_DEPENDENCY_SET_DIGEST: ${{ inputs.dependency_set_digest }}
+
+jobs:
+  release-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release inputs
+        env:
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          DEPENDENCY_SET_DIGEST: ${{ inputs.dependency_set_digest }}
+          APT_OVERLAY_URL: ${{ inputs.apt_overlay_url }}
+        run: |
+          set -euo pipefail
+          version="$(awk -F': *' '/^version:/ {print $2; exit}' .xgc2/product.yml)"
+          [[ "${version}" == "${EXPECTED_VERSION}" ]]
+          [[ "$(git rev-parse HEAD)" == "${EXPECTED_SOURCE_SHA}" ]]
+          case "${{ inputs.prepare_action }}" in
+            release|compatibility-verify) ;;
+            *) exit 1 ;;
+          esac
+          if [[ -n "${DEPENDENCY_SET_DIGEST}" &&
+                ! "${DEPENDENCY_SET_DIGEST}" =~ ^[0-9a-f]{64}$ ]]; then
+            exit 1
+          fi
+          if [[ -n "${APT_OVERLAY_URL}" && -z "${DEPENDENCY_SET_DIGEST}" ]]; then
+            echo "APT overlay requires a dependency-set digest" >&2
+            exit 1
+          fi
+          ./.xgc2/scripts/check_package_compliance.sh
+
+  cpp-quality:
+    if: ${{ inputs.run_cpp_quality || inputs.run_source_tests }}
+    needs: release-guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Focal source tests
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e XGC2_APT_OVERLAY_URL="${XGC2_APT_OVERLAY_URL}" \
+            -v "${GITHUB_WORKSPACE}:/work" -w /work ubuntu:20.04 \
+            bash -lc '
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              ./.xgc2/scripts/install_protobuf_dependency.sh focal
+              apt-get install -y --no-install-recommends \
+                build-essential clang-format cmake cppcheck \
+                libgrpc++-dev libgtest-dev libprotobuf-dev libre2-dev \
+                pkg-config protobuf-compiler protobuf-compiler-grpc
+              ./.xgc2/scripts/check_cpp_quality.sh
+            '
+
+  deb-build-and-smoke:
+    needs: release-guard
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {architecture: amd64, runner: ubuntu-latest, platform: linux/amd64, image: "ubuntu:20.04", distribution: focal}
+          - {architecture: arm64, runner: ubuntu-24.04-arm, platform: linux/arm64, image: "ubuntu:20.04", distribution: focal}
+          - {architecture: amd64, runner: ubuntu-latest, platform: linux/amd64, image: "ubuntu:22.04", distribution: jammy}
+          - {architecture: arm64, runner: ubuntu-24.04-arm, platform: linux/arm64, image: "ubuntu:22.04", distribution: jammy}
+          - {architecture: amd64, runner: ubuntu-latest, platform: linux/amd64, image: "ubuntu:24.04", distribution: noble}
+          - {architecture: arm64, runner: ubuntu-24.04-arm, platform: linux/arm64, image: "ubuntu:24.04", distribution: noble}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build release-train artifact
+        run: |
+          set -euo pipefail
+          install -d .ci/build-manifests
+          docker run --rm --platform "${{ matrix.platform }}" \
+            -e PACKAGE_DISTRIBUTION="${{ matrix.distribution }}" \
+            -e XGC2_APT_OVERLAY_URL="${XGC2_APT_OVERLAY_URL}" \
+            -v "${GITHUB_WORKSPACE}:/work" -w /work \
+            "${{ matrix.image }}" bash -lc '
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              ./.xgc2/scripts/install_protobuf_dependency.sh "${PACKAGE_DISTRIBUTION}"
+              apt-get install -y --no-install-recommends \
+                build-essential cmake dpkg-dev fakeroot file \
+                libgrpc++-dev libprotobuf-dev libre2-dev pkg-config \
+                protobuf-compiler protobuf-compiler-grpc
+              ./.xgc2/scripts/build_deb.sh
+              apt-get install -y ./debs/libxgc2-adapter-link-client-dev_*.deb
+              ./.xgc2/scripts/smoke_test_installed.sh
+            '
+          python3 .xgc2/scripts/xgc2_artifact_manifest.py build \
+            --deb-dir debs --output-dir .ci/build-manifests \
+            --product libxgc2-adapter-link-client-dev \
+            --product-version "${{ inputs.expected_version }}" \
+            --distribution "${{ matrix.distribution }}" \
+            --architecture "${{ matrix.architecture }}" \
+            --source-sha "${{ inputs.expected_source_sha }}" \
+            --ci-run-id "${GITHUB_RUN_ID}" \
+            --ci-workflow "${GITHUB_WORKFLOW}" \
+            --ci-workflow-ref "${GITHUB_WORKFLOW_REF}"
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.prepare_action == 'release' }}
+        with:
+          name: adapter-link-client-${{ matrix.distribution }}-${{ matrix.architecture }}
+          path: |
+            debs/*.deb
+            .ci/build-manifests/*.json
+          retention-days: 14
+          include-hidden-files: true

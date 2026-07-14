@@ -1,0 +1,7 @@
+/build/
+/.ci/
+/debs/
+/Testing/
+compile_commands.json
+__pycache__/
+*.pyc

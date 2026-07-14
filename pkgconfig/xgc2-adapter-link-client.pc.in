@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: xgc2-adapter-link-client
+Description: ROS-independent XGC2 AdapterLink C++ client and protocol bindings
+Version: @PROJECT_VERSION@
+Requires: protobuf grpc++
+Libs: -L${libdir} -lxgc2_adapter_link_client -lxgc2_adapter_link_protocol
+Cflags: -I${includedir}

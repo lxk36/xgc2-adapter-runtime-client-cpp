@@ -1,0 +1,45 @@
+schema: xgc2.product.v1
+id: libxgc2-adapter-link-client-dev
+name: XGC2 AdapterLink C++ Client
+version: 0.1.0-1
+kind: toolchain-apt
+summary: ROS-independent C++ AdapterLink client, generated protocol bindings,
+  and development metadata for native XGC2 robot adapters.
+apt:
+  distribution: focal,jammy,noble
+  install:
+    - libxgc2-adapter-link-client-dev
+  packages:
+    - libxgc2-adapter-link-client-dev
+  depends:
+    - xgc2-protobuf-dev
+    - libgrpc++-dev
+    - libprotobuf-dev
+usage:
+  install: |
+    sudo apt update
+    sudo apt install libxgc2-adapter-link-client-dev
+  smoke_test: |
+    pkg-config --modversion xgc2-adapter-link-client
+  notes: |
+    CMake consumers use find_package(xgc2_adapter_link_client REQUIRED CONFIG)
+    and link xgc2::adapter_link_client. The package exports generated XGC2
+    protobuf C++ headers and xgc2::adapter_link_protocol; consumers must not
+    generate a second binding copy.
+ownership:
+  paths:
+    - /usr/include/xgc2/adapter_link
+    - /usr/include/xgc
+    - /usr/lib/*/libxgc2_adapter_link_client.so*
+    - /usr/lib/*/libxgc2_adapter_link_protocol.so*
+    - /usr/lib/*/cmake/xgc2_adapter_link_client
+    - /usr/lib/*/pkgconfig/xgc2-adapter-link-client.pc
+release:
+  repository: lxk36/xgc2-adapter-link-client-cpp
+  ref: main
+  workflow: release.yml
+  ci_workflow: ci.yml
+  apt_versions:
+    focal: 0.1.0-1~focal
+    jammy: 0.1.0-1~jammy
+    noble: 0.1.0-1~noble
