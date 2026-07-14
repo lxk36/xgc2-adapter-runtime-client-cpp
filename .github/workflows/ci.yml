@@ -45,7 +45,6 @@ jobs:
             '
 
   deb-build-and-smoke:
-    needs: package-compliance
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
