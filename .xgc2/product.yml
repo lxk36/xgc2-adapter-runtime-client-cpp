@@ -1,7 +1,7 @@
 schema: xgc2.product.v1
 id: libxgc2-adapter-link-client-dev
 name: XGC2 AdapterLink C++ Client
-version: 0.1.0-1
+version: 0.2.0-1
 kind: toolchain-apt
 summary: ROS-independent C++ AdapterLink client, generated protocol bindings,
   and development metadata for native XGC2 robot adapters.
@@ -40,6 +40,6 @@ release:
   workflow: release.yml
   ci_workflow: ci.yml
   apt_versions:
-    focal: 0.1.0-1~focal
-    jammy: 0.1.0-1~jammy
-    noble: 0.1.0-1~noble
+    focal: 0.2.0-1~focal
+    jammy: 0.2.0-1~jammy
+    noble: 0.2.0-1~noble

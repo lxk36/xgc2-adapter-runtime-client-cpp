@@ -1,5 +1,10 @@
 # xgc2-adapter-link-client-cpp
 
+Release 0.2 consumes the XGC2 protocol 0.3 envelope and PX4 diagnostic
+semantics. Registry identity is validated once during session registration;
+individual messages carry only routing, time, message ID, sequence, and
+protobuf payload.
+
 `xgc2-adapter-link-client-cpp` is the ROS-independent C++ client for the XGC2
 AdapterLink protocol. Robot integrations keep their native middleware at the
 edge and reuse this library for the complete Core session lifecycle.
@@ -61,7 +66,7 @@ config.socket_path = "/run/xgc2/adapter/adapter-link.sock";
 config.bootstrap_token_file = "/run/xgc2/adapter/run-42.token";
 config.native_protocol = "ros1";
 config.software_version = "1.0.0";
-config.supported_protocol_versions = {1};
+config.supported_protocol_versions = {2};
 config.registry_fingerprint = generated_contract::kRegistryFingerprint;
 config.supported_profiles = {generated_contract::Px4Profile()};
 

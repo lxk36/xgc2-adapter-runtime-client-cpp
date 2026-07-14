@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(xgc2_adapter_link_client VERSION 0.1.0 LANGUAGES CXX)
+project(xgc2_adapter_link_client VERSION 0.2.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -29,7 +29,9 @@ set(XGC2_PROTOCOL_FILES
   xgc/semantic/common/v1/control.proto
   xgc/semantic/common/v1/telemetry.proto
   xgc/semantic/aerial/v1/control.proto
+  xgc/semantic/aerial/v1/diagnostic.proto
   xgc/semantic/aerial/v1/flight.proto
+  xgc/semantic/aerial/v1/setpoint.proto
 )
 
 set(XGC2_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
