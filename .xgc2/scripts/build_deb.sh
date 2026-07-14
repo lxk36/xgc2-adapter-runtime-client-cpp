@@ -30,6 +30,7 @@ case "${distribution}" in
     ;;
 esac
 version="${PACKAGE_VERSION:-${base_version}~${distribution}}"
+protobuf_deb_version="${XGC2_PROTOBUF_DEB_VERSION:-0.2.0-1~${distribution}}"
 if [[ "${ALLOW_UNSCOPED_BINARY_DEB_VERSION:-0}" != "1" ]]; then
   case "${version}" in
     *"~${distribution}"*|*"+${distribution}"*) ;;
@@ -64,7 +65,7 @@ Section: libdevel
 Priority: optional
 Architecture: ${architecture}
 Maintainer: XGC2 <apt@example.com>
-Depends: xgc2-protobuf-dev (>= 0.2.0-1~${distribution}), libgrpc++-dev, libprotobuf-dev
+Depends: xgc2-protobuf-dev (>= ${protobuf_deb_version}), libgrpc++-dev, libprotobuf-dev
 Description: ROS-independent XGC2 AdapterLink C++ client
  Shared AdapterLink client and generated protocol libraries, public headers,
  CMake exports, and pkg-config metadata for native robot adapters. The client
