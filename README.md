@@ -32,6 +32,9 @@ sudo apt install libxgc2-adapter-link-client-dev
 The development package depends on `xgc2-protobuf-dev`, the system protobuf
 runtime, and the system gRPC++ runtime.
 
+`.xgc2/dependencies/xgc2-protobuf.env` locks the exact protocol source revision
+and minimum product version used by CI and by the generated Debian dependency.
+
 ## Consume with CMake
 
 ```cmake
