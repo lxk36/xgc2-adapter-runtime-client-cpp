@@ -30,7 +30,13 @@ case "${distribution}" in
     ;;
 esac
 version="${PACKAGE_VERSION:-${base_version}~${distribution}}"
-protobuf_deb_version="${XGC2_PROTOBUF_DEB_VERSION:-0.2.0-1~${distribution}}"
+protobuf_deb_version="${XGC2_PROTOBUF_DEB_VERSION:-$(
+  dpkg-query -W -f='${Version}' xgc2-protobuf-dev 2>/dev/null
+)}"
+if [[ -z "${protobuf_deb_version}" ]]; then
+  echo "xgc2-protobuf-dev must be installed before packaging" >&2
+  exit 1
+fi
 if [[ "${ALLOW_UNSCOPED_BINARY_DEB_VERSION:-0}" != "1" ]]; then
   case "${version}" in
     *"~${distribution}"*|*"+${distribution}"*) ;;
@@ -89,6 +95,8 @@ test -f "${package_root}/usr/include/xgc2/adapter_link/version.hpp"
 test -f "${package_root}/usr/include/xgc/adapter/v1/adapter.pb.h"
 test -f "${package_root}/usr/include/xgc/adapter/v1/adapter.grpc.pb.h"
 test -f "${package_root}/usr/include/xgc/semantic/aerial/v1/control.pb.h"
+test -f "${package_root}/usr/include/xgc/semantic/aerial/v1/diagnostic.pb.h"
+test -f "${package_root}/usr/include/xgc/semantic/aerial/v1/setpoint.pb.h"
 test -f "${package_root}/usr/lib/${multiarch}/libxgc2_adapter_link_client.so"
 test -f "${package_root}/usr/lib/${multiarch}/libxgc2_adapter_link_protocol.so"
 test -f "${package_root}/usr/lib/${multiarch}/cmake/xgc2_adapter_link_client/xgc2_adapter_link_clientConfig.cmake"

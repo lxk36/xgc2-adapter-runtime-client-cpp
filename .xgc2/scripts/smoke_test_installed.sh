@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 package_name="libxgc2-adapter-link-client-dev"
 multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 dpkg -s "${package_name}" >/dev/null
@@ -12,6 +13,8 @@ test -f /usr/include/xgc2/adapter_link/version.hpp
 test -f /usr/include/xgc/adapter/v1/adapter.pb.h
 test -f /usr/include/xgc/adapter/v1/adapter.grpc.pb.h
 test -f /usr/include/xgc/semantic/aerial/v1/control.pb.h
+test -f /usr/include/xgc/semantic/aerial/v1/diagnostic.pb.h
+test -f /usr/include/xgc/semantic/aerial/v1/setpoint.pb.h
 test -f "/usr/lib/${multiarch}/libxgc2_adapter_link_client.so"
 test -f "/usr/lib/${multiarch}/libxgc2_adapter_link_protocol.so"
 
@@ -23,7 +26,15 @@ for library in \
   fi
 done
 
-test "$(pkg-config --modversion xgc2-adapter-link-client)" = "0.1.0"
+product_version="$(
+  sed -n 's/^version:[[:space:]]*//p' "${repo_root}/.xgc2/product.yml" | head -n 1
+)"
+expected_library_version="${product_version%-*}"
+installed_library_version="$(pkg-config --modversion xgc2-adapter-link-client)"
+if [[ "${installed_library_version}" != "${expected_library_version}" ]]; then
+  echo "installed library version ${installed_library_version} does not match ${expected_library_version}" >&2
+  exit 1
+fi
 
 probe_dir="${XGC2_ADAPTER_CLIENT_SMOKE_DIR:-$(mktemp -d -t xgc2-adapter-client-smoke-XXXXXX)}"
 mkdir -p "${probe_dir}"
