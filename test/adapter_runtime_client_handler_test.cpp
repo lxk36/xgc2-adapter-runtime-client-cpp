@@ -2,6 +2,39 @@
 
 namespace {
 
+TEST(AdapterRuntimeClientOperationResultTest,
+     MapsEveryTypedFailureToItsExactTerminalPhase) {
+  struct TestCase {
+    xgc::adapter::v1::ErrorClass error_class;
+    xgc::adapter::v1::OperationPhase phase;
+  };
+  const TestCase cases[] = {
+      {xgc::adapter::v1::ERROR_CLASS_PERMANENT,
+       xgc::adapter::v1::OPERATION_PHASE_FAILED},
+      {xgc::adapter::v1::ERROR_CLASS_TRANSIENT,
+       xgc::adapter::v1::OPERATION_PHASE_FAILED},
+      {xgc::adapter::v1::ERROR_CLASS_RESOURCE_EXHAUSTED,
+       xgc::adapter::v1::OPERATION_PHASE_FAILED},
+      {xgc::adapter::v1::ERROR_CLASS_UNCERTAIN,
+       xgc::adapter::v1::OPERATION_PHASE_UNCERTAIN},
+      {xgc::adapter::v1::ERROR_CLASS_CANCELLED,
+       xgc::adapter::v1::OPERATION_PHASE_CANCELLED},
+      {xgc::adapter::v1::ERROR_CLASS_REJECTED,
+       xgc::adapter::v1::OPERATION_PHASE_REJECTED},
+      {xgc::adapter::v1::ERROR_CLASS_DEADLINE,
+       xgc::adapter::v1::OPERATION_PHASE_EXPIRED},
+  };
+  for (const auto& test : cases) {
+    const auto result = xgc2::adapter_runtime::OperationResult::Failure(
+        test.error_class, "typed-failure", "typed failure");
+    EXPECT_EQ(test.phase, result.phase);
+    EXPECT_EQ(test.error_class, result.error.class_());
+    EXPECT_TRUE(xgc2::adapter_runtime::internal::IsTerminal(result.phase));
+    EXPECT_TRUE(xgc2::adapter_runtime::internal::ErrorMatchesOperationPhase(
+        result.phase, result.error.class_()));
+  }
+}
+
 TEST(TerminalDigestTest, DomainSeparatesDifferentProtobufTypesWithIdenticalWireBytes) {
   xgc::adapter::v1::UnaryResponse unary;
   unary.set_work_id("same");

@@ -54,7 +54,8 @@ inline bool IsTerminal(xgc::adapter::v1::OperationPhase phase) {
          phase == xgc::adapter::v1::OPERATION_PHASE_REJECTED ||
          phase == xgc::adapter::v1::OPERATION_PHASE_FAILED ||
          phase == xgc::adapter::v1::OPERATION_PHASE_EXPIRED ||
-         phase == xgc::adapter::v1::OPERATION_PHASE_CANCELLED;
+         phase == xgc::adapter::v1::OPERATION_PHASE_CANCELLED ||
+         phase == xgc::adapter::v1::OPERATION_PHASE_UNCERTAIN;
 }
 
 inline std::string ContractKey(const std::string& capability_id,
@@ -170,6 +171,8 @@ inline bool ErrorMatchesOperationPhase(xgc::adapter::v1::OperationPhase phase,
       return error_class == xgc::adapter::v1::ERROR_CLASS_DEADLINE;
     case xgc::adapter::v1::OPERATION_PHASE_CANCELLED:
       return error_class == xgc::adapter::v1::ERROR_CLASS_CANCELLED;
+    case xgc::adapter::v1::OPERATION_PHASE_UNCERTAIN:
+      return error_class == xgc::adapter::v1::ERROR_CLASS_UNCERTAIN;
     default:
       return false;
   }

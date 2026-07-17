@@ -78,7 +78,23 @@ OperationResult OperationResult::Failure(xgc::adapter::v1::ErrorClass error_clas
                                          std::string code, std::string message,
                                          std::int32_t native_code) {
   OperationResult result;
-  result.phase = xgc::adapter::v1::OPERATION_PHASE_FAILED;
+  switch (error_class) {
+    case xgc::adapter::v1::ERROR_CLASS_UNCERTAIN:
+      result.phase = xgc::adapter::v1::OPERATION_PHASE_UNCERTAIN;
+      break;
+    case xgc::adapter::v1::ERROR_CLASS_CANCELLED:
+      result.phase = xgc::adapter::v1::OPERATION_PHASE_CANCELLED;
+      break;
+    case xgc::adapter::v1::ERROR_CLASS_REJECTED:
+      result.phase = xgc::adapter::v1::OPERATION_PHASE_REJECTED;
+      break;
+    case xgc::adapter::v1::ERROR_CLASS_DEADLINE:
+      result.phase = xgc::adapter::v1::OPERATION_PHASE_EXPIRED;
+      break;
+    default:
+      result.phase = xgc::adapter::v1::OPERATION_PHASE_FAILED;
+      break;
+  }
   result.error = MakeError(error_class, std::move(code), std::move(message));
   result.native_code = native_code;
   return result;
