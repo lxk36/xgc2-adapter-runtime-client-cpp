@@ -1,53 +1,145 @@
-# AdapterLink client design
+# Adapter Runtime C++ SDK design
 
-## Boundary
+## Trust boundary
 
-This product is a transport and session client. It does not know ROS, MAVROS,
-Scout messages, a robot namespace, or how a semantic operation is executed.
-Concrete adapters own those decisions through callbacks.
+`ClientConfig::FromBootstrapFile` is the only identity/proof bootstrap path. It
+rejects relative paths, symlinks, non-regular files, wrong ownership, modes
+other than 0600, unknown format versions, malformed protobuf, and an SDK version
+that conflicts with the linked library. The SDK writes its actual version into
+registration; it never lets application defaults stand in for Supervisor
+proofs. The embedded Runtime target must be a canonical absolute Unix socket;
+network schemes and alternate relative transports are rejected before a gRPC
+channel is created.
 
-The public protocol target is generated at product build time from the schemas
-installed by `xgc2-protobuf-dev`. Generated files are installed as part of this
-binary development package so every C++ adapter uses the same generated ABI.
+`BindCapability` can attach callbacks only to an exact contract already present
+in bootstrap registration. Before applying a spec, the SDK validates the whole
+candidate, including instance/process generation, monotonic revision, initial
+bootstrap revision/digest, canonical scope data, version-pinned secret
+references, contract identity, and endpoint subset. Only then can application
+callbacks run.
 
-## Threads and callbacks
+## Spec transaction and capability gating
 
-After a successful synchronous `Start()`, the client owns three workers:
+Spec application is serialized against deactivation:
 
-1. lifecycle: heartbeat, plan reload, session invalidation, and reconnect;
-2. telemetry: bounded batch construction and `PushTelemetry`;
-3. operations: `StreamOperations`, handler dispatch, and event reporting.
+1. stop accepting new dispatch and request cancellation of in-flight work;
+2. wait for cooperative handlers to return;
+3. validate the complete candidate before changing the application;
+4. stop and clear the previous committed configuration;
+5. apply top-level configuration and call `start` only for enabled contracts;
+6. commit the exact revision/digest and readiness set together;
+7. call `ready` for each committed capability.
 
-`validate_and_apply_plan` and `clear_plan` are serialized by the plan-transition
-lock. `handle_operation` is also serialized against a plan transition and is
-never called concurrently for two operations. Telemetry producers may call
-`Publish` concurrently.
+`start` is pre-commit. `ready` is explicitly post-commit and is the place to
+launch native workers that need Runtime Link APIs.
+Missing or invalid grants remain disabled and never start a worker. If a start
+fails, already-started candidate capabilities are unwound in reverse order and
+the candidate revision is reported as not applied. A thrown `ready` callback
+is normalized to a permanent `ready-callback-failed` apply error, terminally
+fails the session, and never marks Work ready.
 
-Callbacks execute without the client state mutex held. A callback may publish
-telemetry or inspect `session()`, but it must not call `Stop()` because Stop
-joins the worker which may currently be executing that callback.
+Callbacks execute without the state mutex held. Lifecycle callbacks are
+serialized by the transition lock. Work callbacks may run concurrently up to
+`dispatch_workers`; callback implementations must honor cancellation and must
+not call `Client::Stop()` from a client-owned thread.
 
-## Session failure
+## Paired streams and fencing
 
-Transport failure, a rejected batch, a changed plan revision, or a closed
-operation stream invalidates the current session. Invalidation performs:
+Register is attempted exactly once for a process generation. As soon as that
+RPC completes, the SDK overwrites and releases both in-memory copies of the
+single-use bootstrap token. A running process never retries Register.
 
-1. cancel the operation stream;
-2. clear identity and queued telemetry;
-3. invoke `clear_plan` exactly once for that applied plan;
-4. retry registration using bounded exponential backoff.
+After Register succeeds, the supervisor opens Control for connection epoch 1.
+It does not open Work until the exact desired spec is applied and its successful
+`ApplyInstanceSpecResult` has been written on Control. Work then writes a
+mandatory `WorkAttach` first frame carrying that applied revision and digest.
+Control and Work form one replaceable transport pair with the same epoch.
 
-The bootstrap credential remains in memory for reconnect after a Core restart.
-The file is never rewritten or deleted by this library.
+Every frame validates:
 
-## Operation semantics
+- instance and session IDs;
+- process and session generations;
+- Runtime and paired-connection epochs;
+- monotonically increasing per-direction frame sequence.
 
-The library validates session/revision, robot membership, enabled channel, and
-the channel advertisement before invoking application code. It reports
-`accepted`, then `started`, and finally exactly one terminal event. The last
-terminal result is cached by operation ID. Delivery of the same serialized
-request replays the terminal result; reuse of an ID with different bytes is
-rejected.
+Failure of either stream cancels and joins both. New dispatch stops, queued and
+in-flight Work is cancelled and quiesced, connection-local queues and tokens
+are cleared, and local source streams receive one `source_closed` callback.
+The committed spec, native capability state, and bounded terminal replay table
+survive the pair replacement. This is a transport generation change, not an
+application or session generation change.
 
-The cache is bounded FIFO and intentionally process-local. Durable operation
-truth belongs to Core.
+The replacement pair uses the same session/process/runtime fence. An
+acknowledged pair advances `connection_epoch` by exactly one; a connection
+attempt that never receives a valid Host Control frame retries its candidate
+epoch. When the Host repeats the same full spec revision and digest,
+the SDK reports it applied without rerunning `apply_instance_spec`, `start`, or
+`ready`. Only a genuinely newer spec performs the stop/clear/apply/start/ready
+transaction.
+
+Pair retries use bounded exponential backoff. A rejected session/fence/epoch or
+an exhausted retry budget stops native state, enters `kSessionLost`, and invokes
+`session_lost` once. The owning process must exit so the Supervisor can launch
+a new process generation with a new one-time bootstrap proof.
+
+## Dispatch, cancellation, and replay
+
+The Work reader never runs application handlers. It validates the frame fence,
+places unary/operation requests in a bounded queue, and remains responsive to
+cancellation and stream credit. Worker threads revalidate the committed spec
+immediately before invoking a handler.
+
+TTL is relative to SDK receipt. The SDK computes the minimum of absolute
+deadline and receipt-plus-TTL, stores that as `deadline_unix_nanos`, and clears
+`ttl_ms` before the callback. A callback therefore receives one unambiguous
+dispatch deadline.
+
+Operation accepted/started events are SDK-owned. Handler output must be
+terminal. Admission reserves a terminal identity slot and worst-case frame
+bytes before a handler can run. Terminal unary/operation frames are cached by
+work ID plus request digest without an eviction path. Identical redelivery
+replays the result; different content reusing an ID is a protocol violation.
+The cache is session-local rather than pair-local, so redelivery after a
+transport replacement cannot rerun a completed non-idempotent native
+operation.
+
+After durably committing a terminal, the Host sends
+`TerminalAcknowledgement`. Its digest is SHA-256 over the fully-qualified
+terminal protobuf name, one NUL byte, and that submessage's deterministic
+protobuf encoding. The type domain prevents different terminal message types
+with identical wire bytes from colliding. An exact Work acknowledgement frees
+the replay entry; an exact source acknowledgement frees its connection-local
+tombstone. Wrong digest, wrong identity kind, and active-identity
+acknowledgements produce `WorkProtocolError`; an already released duplicate is
+absorbed idempotently.
+
+## Host-owned source lifecycle
+
+The Host alone creates source identities. A valid `SourceOpenRequest` names a
+granted `STREAM_SOURCE` endpoint, uses nonempty `WorkContext.work_id` as its
+sole stream identity, and supplies positive initial message and byte credit.
+Every Adapter response echoes that identity as `stream_id`.
+The SDK reserves source identity and byte state before dispatching
+`source_open`. Data publication is fenced until the callback accepts and the
+corresponding `SourceOpenResult` has entered the bounded Work queue.
+
+Every accepted `PublishSource` preflights the complete framed message, consumes
+message and byte credit atomically with queue admission, and advances sequence
+only after admission succeeds. `CloseSource` and Host cancellation emit one
+`SourceClose`; rejected opens and closes remain exact tombstones until Host
+acknowledgement. No timeout or FIFO path can forget an unacknowledged terminal.
+
+## Backpressure and shutdown
+
+Control, Work, dispatch, terminal replay/reservations, and source state all
+have independent entry and byte bounds. Complete frames include their
+worst-case fenced `SessionHeader` in byte accounting. A source write is
+accepted only when both peer-granted message credit and byte credit cover the
+complete chunk; credit is consumed atomically with queue admission. Exhausting
+an identity reservation retires the connection pair instead of accepting Work
+whose terminal could not be retained.
+
+Drain stops new dispatch and reports completion after queued and in-flight work
+reach zero. Remote stop and local `Stop()` request cancellation, cancel all gRPC
+contexts, join stream/supervisor/dispatch threads, stop active capabilities,
+clear the full spec, and return only after callbacks can no longer run.

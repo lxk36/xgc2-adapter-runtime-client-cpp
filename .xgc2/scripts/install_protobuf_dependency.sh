@@ -11,6 +11,11 @@ fi
 # shellcheck source=../dependencies/xgc2-protobuf.env
 source "${dependency_lock}"
 
+if [[ ! "${XGC2_PROTOBUF_SOURCE_REF}" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "XGC2_PROTOBUF_SOURCE_REF must name the released 0.5 protocol commit; current value: ${XGC2_PROTOBUF_SOURCE_REF}" >&2
+  exit 1
+fi
+
 distribution="${1:-${PACKAGE_DISTRIBUTION:-}}"
 if [[ -z "${distribution}" && -r /etc/os-release ]]; then
   # shellcheck disable=SC1091
@@ -24,10 +29,12 @@ case "${distribution}" in
     exit 1
     ;;
 esac
+expected_version="${XGC2_PROTOBUF_VERSION}~${distribution}"
 
 if [[ -n "${XGC2_APT_OVERLAY_URL:-}" ]]; then
   "${script_dir}/configure_xgc2_apt.sh" "${distribution}"
-  apt-get install -y --no-install-recommends xgc2-protobuf-dev
+  apt-get install -y --no-install-recommends \
+    "xgc2-protobuf-dev=${expected_version}"
 else
   source_url="${XGC2_PROTOBUF_SOURCE_URL:-https://github.com/lxk36/xgc2-protobuf.git}"
   work_dir="$(mktemp -d -t xgc2-protobuf-source-XXXXXX)"
@@ -35,7 +42,7 @@ else
   apt-get update
   apt-get install -y --no-install-recommends \
     ca-certificates fakeroot git protobuf-compiler python3 \
-    python3-jsonschema python3-protobuf python3-yaml
+    python3-protobuf python3-yaml
   git init -q "${work_dir}/source"
   git -C "${work_dir}/source" remote add origin "${source_url}"
   git -C "${work_dir}/source" fetch --depth 1 origin "${XGC2_PROTOBUF_SOURCE_REF}"
@@ -56,8 +63,7 @@ else
 fi
 
 installed_version="$(dpkg-query -W -f='${Version}' xgc2-protobuf-dev)"
-minimum_version="${XGC2_PROTOBUF_VERSION}~${distribution}"
-if ! dpkg --compare-versions "${installed_version}" ge "${minimum_version}"; then
-  echo "xgc2-protobuf-dev ${installed_version} is older than ${minimum_version}" >&2
+if [[ "${installed_version}" != "${expected_version}" ]]; then
+  echo "xgc2-protobuf-dev ${installed_version} does not equal ${expected_version}" >&2
   exit 1
 fi

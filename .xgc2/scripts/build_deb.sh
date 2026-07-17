@@ -3,14 +3,16 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-package_name="libxgc2-adapter-link-client-dev"
+package_name="libxgc2-adapter-runtime-client-dev"
 distribution="${PACKAGE_DISTRIBUTION:-}"
-build_dir="${XGC2_ADAPTER_CLIENT_BUILD_DIR:-${repo_root}/.ci/build}"
-stage_dir="${XGC2_ADAPTER_CLIENT_STAGE_DIR:-${repo_root}/.ci/stage}"
-output_dir="${XGC2_ADAPTER_CLIENT_DEB_OUTPUT_DIR:-${repo_root}/debs}"
+build_dir="${XGC2_ADAPTER_RUNTIME_BUILD_DIR:-${repo_root}/.ci/build}"
+stage_dir="${XGC2_ADAPTER_RUNTIME_STAGE_DIR:-${repo_root}/.ci/stage}"
+output_dir="${XGC2_ADAPTER_RUNTIME_DEB_OUTPUT_DIR:-${repo_root}/debs}"
 package_root="${repo_root}/.ci/pkg/${package_name}"
 architecture="$(dpkg --print-architecture)"
 multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
+# shellcheck source=../dependencies/xgc2-protobuf.env
+source "${repo_root}/.xgc2/dependencies/xgc2-protobuf.env"
 
 product_version() {
   sed -n 's/^version:[[:space:]]*//p' "${repo_root}/.xgc2/product.yml" | head -n 1
@@ -37,6 +39,11 @@ if [[ -z "${protobuf_deb_version}" ]]; then
   echo "xgc2-protobuf-dev must be installed before packaging" >&2
   exit 1
 fi
+expected_protobuf_deb_version="${XGC2_PROTOBUF_VERSION}~${distribution}"
+if [[ "${protobuf_deb_version}" != "${expected_protobuf_deb_version}" ]]; then
+  echo "xgc2-protobuf-dev must be exactly ${expected_protobuf_deb_version}; installed/selected ${protobuf_deb_version}" >&2
+  exit 1
+fi
 if [[ "${ALLOW_UNSCOPED_BINARY_DEB_VERSION:-0}" != "1" ]]; then
   case "${version}" in
     *"~${distribution}"*|*"+${distribution}"*) ;;
@@ -53,7 +60,7 @@ cmake -S "${repo_root}" -B "${build_dir}" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr \
   -DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG" \
-  -DXGC2_ADAPTER_LINK_CLIENT_BUILD_TESTING=OFF
+  -DXGC2_ADAPTER_RUNTIME_CLIENT_BUILD_TESTING=OFF
 cmake --build "${build_dir}" -- -j"$(nproc)"
 DESTDIR="${stage_dir}" cmake --build "${build_dir}" --target install
 
@@ -71,12 +78,12 @@ Section: libdevel
 Priority: optional
 Architecture: ${architecture}
 Maintainer: XGC2 <apt@example.com>
-Depends: xgc2-protobuf-dev (>= ${protobuf_deb_version}), libgrpc++-dev, libprotobuf-dev
-Description: ROS-independent XGC2 AdapterLink C++ client
- Shared AdapterLink client and generated protocol libraries, public headers,
- CMake exports, and pkg-config metadata for native robot adapters. The client
- owns registration, plan activation, heartbeat, telemetry batching, operation
- streaming, reconnect, and deterministic shutdown without depending on ROS.
+Depends: xgc2-protobuf-dev (= ${protobuf_deb_version}), libgrpc++-dev, libprotobuf-dev
+Description: Generic XGC2 Adapter Runtime C++ SDK
+ Capability-first AdapterRuntimeLink client and generated protocol libraries,
+ public headers, CMake exports, and pkg-config metadata. The SDK owns trusted
+ bootstrap, registration, paired Control/Work streams, spec application,
+ bounded dispatch, source-stream credit, replay, reconnect, and shutdown.
 EOF
 
 cat > "${package_root}/DEBIAN/postinst" <<'SH'
@@ -90,26 +97,23 @@ set -e
 command -v ldconfig >/dev/null 2>&1 && ldconfig
 SH
 
-test -f "${package_root}/usr/include/xgc2/adapter_link/client.hpp"
-test -f "${package_root}/usr/include/xgc2/adapter_link/version.hpp"
+test -f "${package_root}/usr/include/xgc2/adapter_runtime/client.hpp"
+test -f "${package_root}/usr/include/xgc2/adapter_runtime/version.hpp"
 test -f "${package_root}/usr/include/xgc/adapter/v1/adapter.pb.h"
 test -f "${package_root}/usr/include/xgc/adapter/v1/adapter.grpc.pb.h"
-test -f "${package_root}/usr/include/xgc/semantic/aerial/v1/control.pb.h"
-test -f "${package_root}/usr/include/xgc/semantic/aerial/v1/diagnostic.pb.h"
-test -f "${package_root}/usr/include/xgc/semantic/aerial/v1/setpoint.pb.h"
-test -f "${package_root}/usr/lib/${multiarch}/libxgc2_adapter_link_client.so"
-test -f "${package_root}/usr/lib/${multiarch}/libxgc2_adapter_link_protocol.so"
-test -f "${package_root}/usr/lib/${multiarch}/cmake/xgc2_adapter_link_client/xgc2_adapter_link_clientConfig.cmake"
-test -f "${package_root}/usr/lib/${multiarch}/pkgconfig/xgc2-adapter-link-client.pc"
+test -f "${package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so"
+test -f "${package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so"
+test -f "${package_root}/usr/lib/${multiarch}/cmake/xgc2_adapter_runtime_client/xgc2_adapter_runtime_clientConfig.cmake"
+test -f "${package_root}/usr/lib/${multiarch}/pkgconfig/xgc2-adapter-runtime-client.pc"
 
 find "${package_root}" -type d -exec chmod 0755 {} +
 find "${package_root}" -type f -exec chmod 0644 {} +
 chmod 0755 "${package_root}/DEBIAN" \
   "${package_root}/DEBIAN/postinst" "${package_root}/DEBIAN/postrm"
 find "${package_root}/usr/lib/${multiarch}" -maxdepth 1 -type f \
-  -name 'libxgc2_adapter_link_*.so*' -exec chmod 0755 {} +
+  -name 'libxgc2_adapter_runtime_*.so*' -exec chmod 0755 {} +
 find "${package_root}/usr/lib/${multiarch}" -maxdepth 1 -type f \
-  -name 'libxgc2_adapter_link_*.so*' -exec strip --strip-unneeded {} + \
+  -name 'libxgc2_adapter_runtime_*.so*' -exec strip --strip-unneeded {} + \
   2>/dev/null || true
 
 deb_path="${output_dir}/${package_name}_${version}_${architecture}.deb"

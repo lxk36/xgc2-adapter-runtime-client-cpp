@@ -42,6 +42,7 @@ permissions:
 env:
   XGC2_APT_OVERLAY_URL: ${{ inputs.apt_overlay_url }}
   XGC2_DEPENDENCY_SET_DIGEST: ${{ inputs.dependency_set_digest }}
+  XGC2_PROTOBUF_SOURCE_REF: ${{ vars.XGC2_PROTOBUF_SOURCE_REF }}
 
 jobs:
   release-guard:
@@ -72,6 +73,8 @@ jobs:
             exit 1
           fi
           ./.xgc2/scripts/check_package_compliance.sh
+          source .xgc2/dependencies/xgc2-protobuf.env
+          [[ "${XGC2_PROTOBUF_SOURCE_REF}" =~ ^[0-9a-f]{40}$ ]]
 
   cpp-quality:
     if: ${{ inputs.run_cpp_quality || inputs.run_source_tests }}
@@ -128,12 +131,12 @@ jobs:
                 libgrpc++-dev libprotobuf-dev libre2-dev pkg-config \
                 protobuf-compiler protobuf-compiler-grpc
               ./.xgc2/scripts/build_deb.sh
-              apt-get install -y ./debs/libxgc2-adapter-link-client-dev_*.deb
+              apt-get install -y ./debs/libxgc2-adapter-runtime-client-dev_*.deb
               ./.xgc2/scripts/smoke_test_installed.sh
             '
           python3 .xgc2/scripts/xgc2_artifact_manifest.py build \
             --deb-dir debs --output-dir .ci/build-manifests \
-            --product libxgc2-adapter-link-client-dev \
+            --product libxgc2-adapter-runtime-client-dev \
             --product-version "${{ inputs.expected_version }}" \
             --distribution "${{ matrix.distribution }}" \
             --architecture "${{ matrix.architecture }}" \
@@ -144,7 +147,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: ${{ inputs.prepare_action == 'release' }}
         with:
-          name: adapter-link-client-${{ matrix.distribution }}-${{ matrix.architecture }}
+          name: adapter-runtime-client-${{ matrix.distribution }}-${{ matrix.architecture }}
           path: |
             debs/*.deb
             .ci/build-manifests/*.json

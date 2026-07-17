@@ -3,9 +3,9 @@ exec_prefix=${prefix}
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
-Name: xgc2-adapter-link-client
-Description: ROS-independent XGC2 AdapterLink C++ client and protocol bindings
+Name: xgc2-adapter-runtime-client
+Description: Generic XGC2 AdapterRuntimeLink C++ SDK and protocol bindings
 Version: @PROJECT_VERSION@
 Requires: protobuf grpc++
-Libs: -L${libdir} -lxgc2_adapter_link_client -lxgc2_adapter_link_protocol
+Libs: -L${libdir} -lxgc2_adapter_runtime_client -lxgc2_adapter_runtime_protocol
 Cflags: -I${includedir}
