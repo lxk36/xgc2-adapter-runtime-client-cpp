@@ -38,6 +38,31 @@ inline std::int64_t UnixNanos() {
       .count();
 }
 
+// Maps the next host wall-clock interval boundary onto a monotonic deadline.
+// The caller sends the first heartbeat immediately and invokes this only after
+// a send. Every returned delay is in (0, interval], so wall-clock jumps can
+// change phase alignment but can never lengthen the negotiated heartbeat gap.
+inline std::chrono::steady_clock::time_point NextAlignedHeartbeatDeadline(
+    std::chrono::system_clock::time_point wall_now,
+    std::chrono::steady_clock::time_point monotonic_now,
+    std::chrono::milliseconds interval) {
+  if (interval.count() <= 0) {
+    return monotonic_now;
+  }
+  const auto interval_nanos =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(interval).count();
+  const auto wall_nanos =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(wall_now.time_since_epoch())
+          .count();
+  auto remainder = wall_nanos % interval_nanos;
+  if (remainder < 0) {
+    remainder += interval_nanos;
+  }
+  const auto delay = std::chrono::nanoseconds(interval_nanos - remainder);
+  return monotonic_now +
+         std::chrono::duration_cast<std::chrono::steady_clock::duration>(delay);
+}
+
 inline xgc::adapter::v1::AdapterError MakeError(
     xgc::adapter::v1::ErrorClass error_class, std::string code, std::string message,
     std::uint32_t retry_after_ms = 0) {

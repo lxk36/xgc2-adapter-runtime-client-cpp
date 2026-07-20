@@ -92,7 +92,9 @@ void Client::Impl::ControlWriterLoop(ControlStream* stream, SessionFence fence) 
       const auto now = std::chrono::steady_clock::now();
       if (now >= next_heartbeat) {
         *request.mutable_heartbeat() = BuildHeartbeatLocked(0);
-        next_heartbeat = now + std::chrono::milliseconds(fence.heartbeat_interval_ms);
+        next_heartbeat = internal::NextAlignedHeartbeatDeadline(
+            std::chrono::system_clock::now(), now,
+            std::chrono::milliseconds(fence.heartbeat_interval_ms));
       } else if (!control_queue_.empty()) {
         control_queue_bytes_ -= control_queue_.front().accounted_bytes;
         request = std::move(control_queue_.front().request);

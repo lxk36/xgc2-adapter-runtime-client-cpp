@@ -1,5 +1,6 @@
 #include <google/protobuf/util/message_differencer.h>
 
+#include "../src/internal.hpp"
 #include "adapter_runtime_client_test_support.hpp"
 
 namespace {
@@ -35,6 +36,44 @@ void BindProtocolFixture(xgc2::adapter_runtime::ClientConfig* config) {
 }
 
 }  // namespace
+
+TEST(AdapterRuntimeHeartbeatSchedule,
+     AlignsAfterTheImmediateHeartbeatToHostClockBoundaries) {
+  using std::chrono::milliseconds;
+  const auto wall_now = std::chrono::system_clock::time_point(milliseconds(12345));
+  const auto monotonic_now = std::chrono::steady_clock::time_point(milliseconds(7000));
+  const auto deadline = xgc2::adapter_runtime::internal::NextAlignedHeartbeatDeadline(
+      wall_now, monotonic_now, milliseconds(5000));
+  EXPECT_EQ(std::chrono::duration_cast<milliseconds>(deadline - monotonic_now),
+            milliseconds(2655));
+
+  const auto exact_boundary =
+      xgc2::adapter_runtime::internal::NextAlignedHeartbeatDeadline(
+          std::chrono::system_clock::time_point(milliseconds(15000)), monotonic_now,
+          milliseconds(5000));
+  EXPECT_EQ(std::chrono::duration_cast<milliseconds>(exact_boundary - monotonic_now),
+            milliseconds(5000));
+}
+
+TEST(AdapterRuntimeHeartbeatSchedule,
+     ClockJumpsAndDelayedWakeNeverIncreaseTheNegotiatedMaximumGap) {
+  using std::chrono::milliseconds;
+  const auto interval = milliseconds(5000);
+  const auto delayed_monotonic_now =
+      std::chrono::steady_clock::time_point(milliseconds(91000));
+  for (const auto wall_now : {
+           std::chrono::system_clock::time_point(milliseconds(57601)),
+           std::chrono::system_clock::time_point(milliseconds(3101)),
+           std::chrono::system_clock::time_point(milliseconds(-8999)),
+       }) {
+    const auto deadline = xgc2::adapter_runtime::internal::NextAlignedHeartbeatDeadline(
+        wall_now, delayed_monotonic_now, interval);
+    const auto delay = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        deadline - delayed_monotonic_now);
+    EXPECT_GT(delay.count(), 0);
+    EXPECT_LE(delay, std::chrono::duration_cast<std::chrono::nanoseconds>(interval));
+  }
+}
 
 TEST_F(AdapterRuntimeClientTest,
        RunsFencedDualStreamsCapabilityGatingReplayAndSourceCredit) {
