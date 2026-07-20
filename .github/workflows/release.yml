@@ -131,7 +131,9 @@ jobs:
                 libgrpc++-dev libprotobuf-dev libre2-dev pkg-config \
                 protobuf-compiler protobuf-compiler-grpc
               ./.xgc2/scripts/build_deb.sh
-              apt-get install -y ./debs/libxgc2-adapter-runtime-client-dev_*.deb
+              apt-get install -y \
+                ./debs/libxgc2-adapter-runtime-client1_*.deb \
+                ./debs/libxgc2-adapter-runtime-client-dev_*.deb
               ./.xgc2/scripts/smoke_test_installed.sh
             '
           python3 .xgc2/scripts/xgc2_artifact_manifest.py build \

@@ -3,9 +3,11 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-package_name="libxgc2-adapter-runtime-client-dev"
+dev_package="libxgc2-adapter-runtime-client-dev"
+runtime_package="libxgc2-adapter-runtime-client1"
 multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
-dpkg -s "${package_name}" >/dev/null
+dpkg -s "${dev_package}" >/dev/null
+dpkg -s "${runtime_package}" >/dev/null
 dpkg -s xgc2-protobuf-dev >/dev/null
 # shellcheck source=../dependencies/xgc2-protobuf.env
 source "${repo_root}/.xgc2/dependencies/xgc2-protobuf.env"
@@ -25,10 +27,47 @@ test -f /usr/include/xgc/adapter/v1/adapter.pb.h
 test -f /usr/include/xgc/adapter/v1/adapter.grpc.pb.h
 test -f "/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so"
 test -f "/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so"
+test -L "/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.1"
+test -L "/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.1"
+
+dev_version="$(dpkg-query -W -f='${Version}' "${dev_package}")"
+runtime_version="$(dpkg-query -W -f='${Version}' "${runtime_package}")"
+if [[ "${runtime_version}" != "${dev_version}" ]]; then
+  echo "runtime ${runtime_version} does not match development package ${dev_version}" >&2
+  exit 1
+fi
+dev_depends="$(dpkg-query -W -f='${Depends}' "${dev_package}")"
+runtime_depends="$(dpkg-query -W -f='${Depends}' "${runtime_package}")"
+grep -Fq "${runtime_package} (= ${dev_version})" <<<"${dev_depends}"
+if grep -Eq '(^|, )(xgc2-protobuf-dev|libxgc2-adapter-runtime-client-dev)([ (]|,|$)' \
+    <<<"${runtime_depends}"; then
+  echo "runtime package leaked a schema or development dependency" >&2
+  exit 1
+fi
+
+package_files() {
+  local package="$1"
+  local path
+  while IFS= read -r path; do
+    if [[ -f "${path}" || -L "${path}" ]]; then
+      printf '%s\n' "${path}"
+    fi
+  done < <(dpkg-query -L "${package}")
+}
+mapfile -t overlaps < <(
+  comm -12 \
+    <(package_files "${runtime_package}" | sort) \
+    <(package_files "${dev_package}" | sort)
+)
+if (( ${#overlaps[@]} != 0 )); then
+  echo "runtime and development packages overlap files:" >&2
+  printf '  %s\n' "${overlaps[@]}" >&2
+  exit 1
+fi
 
 for library in \
-    "/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so" \
-    "/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so"; do
+    "/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.1" \
+    "/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.1"; do
   if ldd "${library}" | tee /tmp/xgc2-adapter-runtime-ldd.txt | grep -q 'not found'; then
     exit 1
   fi
@@ -80,4 +119,26 @@ cmake -S "${probe_dir}" -B "${probe_dir}/build"
 cmake --build "${probe_dir}/build" -- -j2
 "${probe_dir}/build/probe"
 
-echo "libxgc2-adapter-runtime-client-dev installed smoke test passed."
+mkdir -p "${probe_dir}/debian"
+cat > "${probe_dir}/debian/control" <<'EOF'
+Source: xgc2-adapter-runtime-probe
+Section: misc
+Priority: optional
+Maintainer: XGC2 <apt@example.com>
+
+Package: xgc2-adapter-runtime-probe
+Architecture: any
+EOF
+probe_shlibs="$(
+  cd "${probe_dir}"
+  dpkg-shlibdeps -O "-e${probe_dir}/build/probe"
+)"
+grep -Eq '(^|=|, )libxgc2-adapter-runtime-client1( |[(])' \
+  <<<"${probe_shlibs}"
+if grep -Eq '(libxgc2-adapter-runtime-client-dev|xgc2-protobuf-dev)' \
+    <<<"${probe_shlibs}"; then
+  echo "consumer shlibs leaked development-only dependencies" >&2
+  exit 1
+fi
+
+echo "Adapter Runtime ABI and development package smoke test passed."

@@ -85,6 +85,8 @@ apt_distributions="$(
 
 grep -q '^id: libxgc2-adapter-runtime-client-dev$' "${metadata}"
 grep -q '^kind: toolchain-apt$' "${metadata}"
+grep -q '^    - libxgc2-adapter-runtime-client1$' "${metadata}"
+grep -q '^    xgc2-protobuf: rebuild$' "${metadata}"
 if [[ ! "${product_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
   echo "product metadata version is missing or invalid: ${product_version:-<empty>}" >&2
   exit 1
@@ -105,5 +107,19 @@ for distribution in "${distributions[@]}"; do
 done
 grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_ABI_VERSION 1$' \
   include/xgc2/adapter_runtime/version.hpp
+if [[ "$(grep -c '^  SOVERSION 1$' CMakeLists.txt)" -ne 2 ]]; then
+  echo "both public shared libraries must preserve ABI SONAME 1" >&2
+  exit 1
+fi
+grep -q '^runtime_package="libxgc2-adapter-runtime-client1"$' \
+  .xgc2/scripts/build_deb.sh
+grep -Fq "Depends: \${runtime_package} (= \${version})" \
+  .xgc2/scripts/build_deb.sh
+grep -Fq "Breaks: \${dev_package} (<< \${version})" \
+  .xgc2/scripts/build_deb.sh
+grep -Fq "Replaces: \${dev_package} (<< \${version})" \
+  .xgc2/scripts/build_deb.sh
+grep -Fq "libxgc2_adapter_runtime_client 1 \${runtime_package} (>= \${version})" \
+  .xgc2/scripts/build_deb.sh
 
-echo "libxgc2-adapter-runtime-client-dev package compliance checks passed."
+echo "Adapter Runtime split package compliance checks passed."

@@ -170,6 +170,20 @@ Headers:
 #include <xgc2/adapter_runtime/version.hpp>
 ```
 
+## Debian package boundary
+
+`libxgc2-adapter-runtime-client1` owns only ABI-1 shared objects and declares
+their system-library requirements through Debian shlibs metadata. Deployed
+Adapter executables depend on this SONAME package, so a compatible SDK rebuild
+does not force them to install headers or protocol schema sources.
+
+`libxgc2-adapter-runtime-client-dev` keeps the existing CMake and pkg-config
+consumer interface. It owns the unversioned linker symlinks, public/generated
+headers, and build metadata, and depends on the exact matching ABI package.
+Upgrading the existing `-dev` package therefore installs the split runtime
+package automatically. ABI-breaking changes must increment both `SOVERSION`
+and the runtime package suffix; they must never replace ABI 1 in place.
+
 ## Build and test
 
 Point CMake at an exact `xgc2-protobuf-dev` 0.5.0-1 prefix containing Runtime
