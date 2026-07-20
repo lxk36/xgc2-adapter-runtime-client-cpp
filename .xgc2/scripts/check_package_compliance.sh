@@ -87,6 +87,14 @@ grep -q '^id: libxgc2-adapter-runtime-client-dev$' "${metadata}"
 grep -q '^kind: toolchain-apt$' "${metadata}"
 grep -q '^    - libxgc2-adapter-runtime-client1$' "${metadata}"
 grep -q '^    xgc2-protobuf: rebuild$' "${metadata}"
+for workflow in .github/workflows/ci.yml .github/workflows/release.yml; do
+  docker_builds="$(grep -c 'docker run --rm' "${workflow}")"
+  protobuf_ref_forwards="$(grep -c -- '-e XGC2_PROTOBUF_SOURCE_REF' "${workflow}")"
+  if [[ "${protobuf_ref_forwards}" -ne "${docker_builds}" ]]; then
+    echo "${workflow} must forward XGC2_PROTOBUF_SOURCE_REF into every build container" >&2
+    exit 1
+  fi
+done
 if [[ ! "${product_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
   echo "product metadata version is missing or invalid: ${product_version:-<empty>}" >&2
   exit 1

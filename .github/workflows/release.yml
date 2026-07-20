@@ -87,6 +87,7 @@ jobs:
           set -euo pipefail
           docker run --rm \
             -e XGC2_APT_OVERLAY_URL="${XGC2_APT_OVERLAY_URL}" \
+            -e XGC2_PROTOBUF_SOURCE_REF \
             -v "${GITHUB_WORKSPACE}:/work" -w /work ubuntu:20.04 \
             bash -lc '
               set -euo pipefail
@@ -121,6 +122,7 @@ jobs:
           docker run --rm --platform "${{ matrix.platform }}" \
             -e PACKAGE_DISTRIBUTION="${{ matrix.distribution }}" \
             -e XGC2_APT_OVERLAY_URL="${XGC2_APT_OVERLAY_URL}" \
+            -e XGC2_PROTOBUF_SOURCE_REF \
             -v "${GITHUB_WORKSPACE}:/work" -w /work \
             "${{ matrix.image }}" bash -lc '
               set -euo pipefail
