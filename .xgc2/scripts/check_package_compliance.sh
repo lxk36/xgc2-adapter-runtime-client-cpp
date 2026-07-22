@@ -41,9 +41,8 @@ done
     echo "invalid locked protobuf product version: ${XGC2_PROTOBUF_VERSION}" >&2
     exit 1
   fi
-  if [[ "${XGC2_PROTOBUF_SOURCE_REF}" != "UNRELEASED_0_5_0" &&
-        ! "${XGC2_PROTOBUF_SOURCE_REF}" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "protobuf dependency must be the explicit unreleased marker or a full source SHA" >&2
+  if [[ ! "${XGC2_PROTOBUF_SOURCE_REF}" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "protobuf dependency must be a full source SHA" >&2
     exit 1
   fi
 )

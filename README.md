@@ -186,7 +186,7 @@ and the runtime package suffix; they must never replace ABI 1 in place.
 
 ## Build and test
 
-Point CMake at an exact `xgc2-protobuf-dev` 0.5.0-1 prefix containing Runtime
+Point CMake at an exact `xgc2-protobuf-dev` 0.5.0-2 prefix containing Runtime
 Link protocol v2:
 
 ```bash
