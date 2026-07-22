@@ -71,6 +71,7 @@ class Client::Impl {
     DispatchKind kind = DispatchKind::kUnary;
     std::string work_id;
     std::string fingerprint;
+    bool volatile_work = false;
     xgc::adapter::v1::UnaryRequest unary;
     xgc::adapter::v1::OperationRequest operation;
     xgc::adapter::v1::SourceOpenRequest source_open;
@@ -84,6 +85,7 @@ class Client::Impl {
   struct WorkTokenState {
     std::shared_ptr<CancellationState> cancellation;
     std::size_t terminal_reservation_bytes = 0;
+    bool volatile_work = false;
   };
 
   struct ReplayEntry {
