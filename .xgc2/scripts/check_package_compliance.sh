@@ -160,6 +160,7 @@ done
 grep -Fq 'apt-cache policy xgc2-protobuf-dev' .xgc2/scripts/install_protobuf_dependency.sh
 grep -Fq 'XGC2_APT_OVERLAY_URL' .xgc2/scripts/install_protobuf_dependency.sh
 grep -Fq 'XGC2_PROTOBUF_PROTOCOL_VERSION' .xgc2/scripts/build_deb.sh
+grep -Fq 'XGC2_PROTOBUF_PROTOCOL_VERSION' .xgc2/scripts/smoke_test_installed.sh
 if grep -Fq 'XGC2_PROTOBUF_DEB_VERSION' .xgc2/scripts/build_deb.sh; then
   echo "package build must derive the protobuf Debian revision from the installed dependency" >&2
   exit 1

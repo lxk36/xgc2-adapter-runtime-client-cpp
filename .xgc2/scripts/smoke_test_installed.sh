@@ -14,10 +14,10 @@ source "${repo_root}/.xgc2/dependencies/xgc2-protobuf.env"
 # shellcheck disable=SC1091
 . /etc/os-release
 distribution="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
-expected_protobuf_version="${XGC2_PROTOBUF_VERSION}~${distribution}"
 installed_protobuf_version="$(dpkg-query -W -f='${Version}' xgc2-protobuf-dev)"
-if [[ "${installed_protobuf_version}" != "${expected_protobuf_version}" ]]; then
-  echo "installed protobuf ${installed_protobuf_version} does not equal ${expected_protobuf_version}" >&2
+protobuf_protocol_pattern="${XGC2_PROTOBUF_PROTOCOL_VERSION//./\\.}"
+if [[ ! "${installed_protobuf_version}" =~ ^${protobuf_protocol_pattern}-[0-9]+~${distribution}$ ]]; then
+  echo "installed protobuf ${installed_protobuf_version} is outside the ${XGC2_PROTOBUF_PROTOCOL_VERSION} protocol line for ${distribution}" >&2
   exit 1
 fi
 
