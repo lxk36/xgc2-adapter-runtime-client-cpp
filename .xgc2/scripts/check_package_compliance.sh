@@ -119,9 +119,14 @@ if ! awk '
 fi
 for workflow in .github/workflows/ci.yml .github/workflows/release.yml; do
   docker_builds="$(grep -c 'docker run --rm' "${workflow}")"
-  protobuf_ref_forwards="$(grep -c -- '-e XGC2_PROTOBUF_SOURCE_REF' "${workflow}")"
-  if [[ "${protobuf_ref_forwards}" -ne "${docker_builds}" ]]; then
-    echo "${workflow} must forward XGC2_PROTOBUF_SOURCE_REF into every build container" >&2
+  protobuf_lock_loads="$(grep -c './.xgc2/scripts/install_protobuf_dependency.sh' "${workflow}")"
+  if [[ "${protobuf_lock_loads}" -ne "${docker_builds}" ]]; then
+    echo "${workflow} must load the protobuf product lock in every build container" >&2
+    exit 1
+  fi
+  if grep -Fq 'vars.XGC2_PROTOBUF_SOURCE_REF' "${workflow}" ||
+      grep -Fq -- '-e XGC2_PROTOBUF_SOURCE_REF' "${workflow}"; then
+    echo "${workflow} must not override the immutable protobuf product lock" >&2
     exit 1
   fi
 done
