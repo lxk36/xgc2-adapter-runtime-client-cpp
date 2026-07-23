@@ -53,7 +53,6 @@ void Client::Impl::EnqueueUnary(const xgc::adapter::v1::UnaryRequest& request,
   job.kind = DispatchKind::kUnary;
   job.work_id = request.context().work_id();
   job.fingerprint = RequestFingerprint(request.context());
-  job.volatile_work = request.context().volatile_();
   job.inbound_frame_sequence = frame_sequence;
   job.unary = request;
   NormalizeDeadline(job.unary.mutable_context()->mutable_deadline(), UnixNanos());
@@ -298,7 +297,6 @@ void Client::Impl::EnqueueDispatch(DispatchJob job) {
         WorkTokenState token;
         token.cancellation = job.cancellation;
         token.terminal_reservation_bytes = job.terminal_reservation_bytes;
-        token.volatile_work = job.volatile_work;
         work_tokens_.emplace(job.work_id, std::move(token));
         dispatch_queue_bytes_ += job.accounted_bytes;
         dispatch_queue_.push_back(std::move(job));
@@ -461,14 +459,6 @@ bool Client::Impl::ValidateWorkContextLocked(
                  : xgc::adapter::v1::INTERACTION_MODE_STREAM_SOURCE);
   if (active.endpoint->interaction_mode() != expected_mode) {
     return Fail(error, "Work interaction mode does not match the endpoint");
-  }
-  if (context.volatile_() != active.endpoint->volatile_supported()) {
-    return Fail(error, "Work volatile mode does not match the endpoint contract");
-  }
-  if (context.volatile_() &&
-      (kind != DispatchKind::kUnary || !context.idempotency_key().empty())) {
-    return Fail(error,
-                "volatile Work must be unary and must not declare an idempotency key");
   }
   if (active.endpoint->deadline_required() &&
       context.deadline().deadline_unix_nanos() <= 0) {

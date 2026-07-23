@@ -123,7 +123,8 @@ started events are emitted by the SDK. Before accepting unary or operation
 Work, the SDK reserves both an identity slot and bytes for its eventual
 terminal. The exact terminal is retained without FIFO eviction; redelivery
 with the same work ID and request digest replays it without calling the handler
-again.
+again. Every unary and operation request follows this one durable terminal
+path; there is no connection-local dispatch branch that bypasses replay.
 
 The Host releases retained state with `TerminalAcknowledgement` only after its
 terminal commit is durable. `terminal_digest` is
@@ -172,21 +173,24 @@ Headers:
 
 ## Debian package boundary
 
-`libxgc2-adapter-runtime-client1` owns only ABI-1 shared objects and declares
+`libxgc2-adapter-runtime-client2` owns only ABI-2 shared objects and declares
 their system-library requirements through Debian shlibs metadata. Deployed
 Adapter executables depend on this SONAME package, so a compatible SDK rebuild
-does not force them to install headers or protocol schema sources.
+does not force them to install headers or protocol schema sources. The former
+ABI-1 package may remain installed for binaries linked against it; ABI 2 does
+not overwrite those shared objects.
 
 `libxgc2-adapter-runtime-client-dev` keeps the existing CMake and pkg-config
 consumer interface. It owns the unversioned linker symlinks, public/generated
 headers, and build metadata, and depends on the exact matching ABI package.
 Upgrading the existing `-dev` package therefore installs the split runtime
 package automatically. ABI-breaking changes must increment both `SOVERSION`
-and the runtime package suffix; they must never replace ABI 1 in place.
+and the runtime package suffix; one ABI package must never replace another in
+place.
 
 ## Build and test
 
-Point CMake at an exact `xgc2-protobuf-dev` 0.5.0-2 prefix containing Runtime
+Point CMake at an exact `xgc2-protobuf-dev` 0.5.0-3 prefix containing Runtime
 Link protocol v2:
 
 ```bash

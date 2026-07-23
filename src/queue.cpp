@@ -204,23 +204,6 @@ Client::Impl::TerminalCommitResult Client::Impl::CommitTerminalFrame(
   if (reservation > terminal_replay_bytes_) {
     return TerminalCommitResult::kUnavailable;
   }
-  if (job.volatile_work) {
-    if (reservation != 0 || (token != work_tokens_.end() &&
-                             (token->second.cancellation != job.cancellation ||
-                              !token->second.volatile_work))) {
-      return TerminalCommitResult::kUnavailable;
-    }
-    if (token != work_tokens_.end()) {
-      work_tokens_.erase(token);
-    }
-    QueuedWorkFrame queued;
-    queued.request = std::move(frame);
-    queued.accounted_bytes = frame_bytes;
-    work_queue_.push_back(std::move(queued));
-    work_queue_bytes_ += frame_bytes;
-    condition_.notify_all();
-    return TerminalCommitResult::kCommitted;
-  }
   const std::size_t replay_without_reservation = terminal_replay_bytes_ - reservation;
   const std::size_t retained_identities = replay_.size() + work_tokens_.size();
   if ((!converts_reservation &&
@@ -244,9 +227,6 @@ Client::Impl::TerminalCommitResult Client::Impl::CommitTerminalFrame(
 }
 
 bool Client::Impl::ReserveTerminalReplayLocked(DispatchJob* job) {
-  if (job != nullptr && job->volatile_work) {
-    return !job->work_id.empty();
-  }
   if (job == nullptr || job->work_id.empty() ||
       replay_.size() + work_tokens_.size() >= config_.maximum_terminal_replay) {
     return false;

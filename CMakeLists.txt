@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(xgc2_adapter_runtime_client VERSION 0.5.0 LANGUAGES CXX)
+project(xgc2_adapter_runtime_client VERSION 0.6.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -61,6 +61,15 @@ add_custom_command(
 
 set(XGC2_ADAPTER_PROTO
     "${XGC2_PROTOBUF_PROTO_ROOT}/xgc/adapter/v1/adapter.proto")
+file(READ "${XGC2_ADAPTER_PROTO}" XGC2_ADAPTER_PROTO_SOURCE)
+if(XGC2_ADAPTER_PROTO_SOURCE MATCHES
+     "bool[ \t\r\n]+volatile_supported[ \t\r\n]*=" OR
+   XGC2_ADAPTER_PROTO_SOURCE MATCHES
+     "bool[ \t\r\n]+volatile[ \t\r\n]*=")
+  message(FATAL_ERROR
+          "xgc2-protobuf-dev retains the retired non-durable Work contract")
+endif()
+unset(XGC2_ADAPTER_PROTO_SOURCE)
 set(XGC2_ADAPTER_GRPC_SOURCE
     "${XGC2_GENERATED_DIR}/xgc/adapter/v1/adapter.grpc.pb.cc")
 set(XGC2_ADAPTER_GRPC_HEADER
@@ -88,7 +97,7 @@ set_target_properties(xgc2_adapter_runtime_protocol PROPERTIES
   OUTPUT_NAME xgc2_adapter_runtime_protocol
   EXPORT_NAME adapter_runtime_protocol
   VERSION ${PROJECT_VERSION}
-  SOVERSION 1
+  SOVERSION 2
 )
 target_compile_features(xgc2_adapter_runtime_protocol PUBLIC cxx_std_14)
 target_include_directories(xgc2_adapter_runtime_protocol
@@ -120,7 +129,7 @@ set_target_properties(xgc2_adapter_runtime_client PROPERTIES
   OUTPUT_NAME xgc2_adapter_runtime_client
   EXPORT_NAME adapter_runtime_client
   VERSION ${PROJECT_VERSION}
-  SOVERSION 1
+  SOVERSION 2
 )
 target_compile_features(xgc2_adapter_runtime_client PUBLIC cxx_std_14)
 target_compile_options(xgc2_adapter_runtime_client PRIVATE
@@ -164,7 +173,7 @@ configure_package_config_file(
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/xgc2_adapter_runtime_clientConfigVersion.cmake"
   VERSION ${PROJECT_VERSION}
-  COMPATIBILITY SameMajorVersion
+  COMPATIBILITY ExactVersion
 )
 install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/xgc2_adapter_runtime_clientConfig.cmake"

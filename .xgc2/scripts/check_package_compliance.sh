@@ -45,6 +45,11 @@ done
     echo "protobuf dependency must be a full source SHA" >&2
     exit 1
   fi
+  if [[ "${XGC2_PROTOBUF_VERSION}" != "0.5.0-3" ||
+        "${XGC2_PROTOBUF_SOURCE_REF}" != "6fd0781937613368bc4a3e4cb1a6fd6d03ead826" ]]; then
+    echo "protobuf dependency lock is not the durable-only 0.5.0-3 contract" >&2
+    exit 1
+  fi
 )
 
 if git ls-files | grep -E '(^|/)(build|devel|install|\.ci|Testing)(/|$)' >/dev/null; then
@@ -60,6 +65,12 @@ if grep -R -E -i \
     'adapter_link|AdapterPlan|ProfileAdvertisement|robot([-_](group|resource|id))?|telemetry|OpenSourceStream|CloseSourceStream|STREAM_(SINK|DUPLEX)|protocol[[:space:]]+0\.4|bounded[[:space:]]+FIFO' \
     CMakeLists.txt cmake pkgconfig include src test README.md docs 2>/dev/null; then
   echo "legacy or domain-specific API leaked into the generic Runtime SDK" >&2
+  exit 1
+fi
+if grep -R -E \
+    'volatile_(supported|work)|volatile (Work|endpoint)|context\(\)\.volatile_|\.volatile_\(' \
+    cmake pkgconfig include src test README.md docs 2>/dev/null; then
+  echo "retired non-durable Work semantics leaked into the Runtime SDK" >&2
   exit 1
 fi
 while IFS= read -r source; do
@@ -84,7 +95,7 @@ apt_distributions="$(
 
 grep -q '^id: libxgc2-adapter-runtime-client-dev$' "${metadata}"
 grep -q '^kind: toolchain-apt$' "${metadata}"
-grep -q '^    - libxgc2-adapter-runtime-client1$' "${metadata}"
+grep -q '^    - libxgc2-adapter-runtime-client2$' "${metadata}"
 grep -q '^    xgc2-protobuf: rebuild$' "${metadata}"
 for workflow in .github/workflows/ci.yml .github/workflows/release.yml; do
   docker_builds="$(grep -c 'docker run --rm' "${workflow}")"
@@ -112,13 +123,25 @@ for distribution in "${distributions[@]}"; do
     exit 1
   fi
 done
-grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_ABI_VERSION 1$' \
+grep -q '^version: 0.6.0-1$' "${metadata}"
+grep -q '^project(xgc2_adapter_runtime_client VERSION 0.6.0 LANGUAGES CXX)$' \
+  CMakeLists.txt
+grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_MAJOR 0$' \
   include/xgc2/adapter_runtime/version.hpp
-if [[ "$(grep -c '^  SOVERSION 1$' CMakeLists.txt)" -ne 2 ]]; then
-  echo "both public shared libraries must preserve ABI SONAME 1" >&2
+grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_MINOR 6$' \
+  include/xgc2/adapter_runtime/version.hpp
+grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_PATCH 0$' \
+  include/xgc2/adapter_runtime/version.hpp
+grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_ABI_VERSION 2$' \
+  include/xgc2/adapter_runtime/version.hpp
+grep -q '^constexpr const char\* kClientVersion = "0.6.0";$' \
+  include/xgc2/adapter_runtime/version.hpp
+if [[ "$(grep -c '^  SOVERSION 2$' CMakeLists.txt)" -ne 2 ]]; then
+  echo "both public shared libraries must expose ABI SONAME 2" >&2
   exit 1
 fi
-grep -q '^runtime_package="libxgc2-adapter-runtime-client1"$' \
+grep -q '^  COMPATIBILITY ExactVersion$' CMakeLists.txt
+grep -q '^runtime_package="libxgc2-adapter-runtime-client2"$' \
   .xgc2/scripts/build_deb.sh
 grep -Fq "Depends: \${runtime_package} (= \${version})" \
   .xgc2/scripts/build_deb.sh
@@ -126,7 +149,7 @@ grep -Fq "Breaks: \${dev_package} (<< \${version})" \
   .xgc2/scripts/build_deb.sh
 grep -Fq "Replaces: \${dev_package} (<< \${version})" \
   .xgc2/scripts/build_deb.sh
-grep -Fq "libxgc2_adapter_runtime_client 1 \${runtime_package} (>= \${version})" \
+grep -Fq "libxgc2_adapter_runtime_client 2 \${runtime_package} (>= \${version})" \
   .xgc2/scripts/build_deb.sh
 
 echo "Adapter Runtime split package compliance checks passed."

@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 dev_package="libxgc2-adapter-runtime-client-dev"
-runtime_package="libxgc2-adapter-runtime-client1"
+runtime_package="libxgc2-adapter-runtime-client2"
 multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
 dpkg -s "${dev_package}" >/dev/null
 dpkg -s "${runtime_package}" >/dev/null
@@ -27,8 +27,8 @@ test -f /usr/include/xgc/adapter/v1/adapter.pb.h
 test -f /usr/include/xgc/adapter/v1/adapter.grpc.pb.h
 test -f "/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so"
 test -f "/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so"
-test -L "/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.1"
-test -L "/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.1"
+test -L "/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.2"
+test -L "/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.2"
 
 dev_version="$(dpkg-query -W -f='${Version}' "${dev_package}")"
 runtime_version="$(dpkg-query -W -f='${Version}' "${runtime_package}")"
@@ -66,8 +66,8 @@ if (( ${#overlaps[@]} != 0 )); then
 fi
 
 for library in \
-    "/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.1" \
-    "/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.1"; do
+    "/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.2" \
+    "/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.2"; do
   if ldd "${library}" | tee /tmp/xgc2-adapter-runtime-ldd.txt | grep -q 'not found'; then
     exit 1
   fi
@@ -110,7 +110,7 @@ int main()
   xgc::adapter::v1::AdapterProcessBootstrap bootstrap;
   xgc::adapter::v1::WorkAttach attach;
   return bootstrap.format_version() != 0 || attach.applied_spec_revision() != 0 ||
-                 xgc2::adapter_runtime::kClientAbiVersion != 1
+                 xgc2::adapter_runtime::kClientAbiVersion != 2
              ? 1
              : 0;
 }
@@ -133,7 +133,7 @@ probe_shlibs="$(
   cd "${probe_dir}"
   dpkg-shlibdeps -O "-e${probe_dir}/build/probe"
 )"
-grep -Eq '(^|=|, )libxgc2-adapter-runtime-client1( |[(])' \
+grep -Eq '(^|=|, )libxgc2-adapter-runtime-client2( |[(])' \
   <<<"${probe_shlibs}"
 if grep -Eq '(libxgc2-adapter-runtime-client-dev|xgc2-protobuf-dev)' \
     <<<"${probe_shlibs}"; then

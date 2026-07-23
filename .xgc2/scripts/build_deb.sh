@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 dev_package="libxgc2-adapter-runtime-client-dev"
-runtime_package="libxgc2-adapter-runtime-client1"
+runtime_package="libxgc2-adapter-runtime-client2"
 distribution="${PACKAGE_DISTRIBUTION:-}"
 build_dir="${XGC2_ADAPTER_RUNTIME_BUILD_DIR:-${repo_root}/.ci/build}"
 stage_dir="${XGC2_ADAPTER_RUNTIME_STAGE_DIR:-${repo_root}/.ci/stage}"
@@ -90,10 +90,10 @@ cp -a "${stage_dir}/usr" "${dev_package_root}/"
 
 for library in xgc2_adapter_runtime_client xgc2_adapter_runtime_protocol; do
   versioned="${stage_lib_dir}/lib${library}.so.${library_version}"
-  soname_link="${stage_lib_dir}/lib${library}.so.1"
+  soname_link="${stage_lib_dir}/lib${library}.so.2"
   test -f "${versioned}"
   test -L "${soname_link}"
-  readelf -d "${versioned}" | grep -Fq "Library soname: [lib${library}.so.1]"
+  readelf -d "${versioned}" | grep -Fq "Library soname: [lib${library}.so.2]"
   cp -a "${versioned}" "${soname_link}" "${runtime_lib_dir}/"
 done
 find "${dev_lib_dir}" -maxdepth 1 \
@@ -120,8 +120,8 @@ Package: ${dev_package}
 Architecture: any
 EOF
 cat > "${shlibdeps_dir}/debian/shlibs.local" <<EOF
-libxgc2_adapter_runtime_client 1 ${runtime_package} (>= ${version})
-libxgc2_adapter_runtime_protocol 1 ${runtime_package} (>= ${version})
+libxgc2_adapter_runtime_client 2 ${runtime_package} (>= ${version})
+libxgc2_adapter_runtime_protocol 2 ${runtime_package} (>= ${version})
 EOF
 shlibdeps_output="$(
   cd "${shlibdeps_dir}"
@@ -149,13 +149,13 @@ Depends: ${runtime_depends}
 Breaks: ${dev_package} (<< ${version})
 Replaces: ${dev_package} (<< ${version})
 Description: XGC2 Adapter Runtime C++ shared libraries
- ABI 1 shared libraries for AdapterRuntimeLink clients and generated protocol
+ ABI 2 shared libraries for AdapterRuntimeLink clients and generated protocol
  bindings. Headers, schemas, CMake exports, and pkg-config metadata are kept in
  the separate development package.
 EOF
 cat > "${runtime_package_root}/DEBIAN/shlibs" <<EOF
-libxgc2_adapter_runtime_client 1 ${runtime_package} (>= ${version})
-libxgc2_adapter_runtime_protocol 1 ${runtime_package} (>= ${version})
+libxgc2_adapter_runtime_client 2 ${runtime_package} (>= ${version})
+libxgc2_adapter_runtime_protocol 2 ${runtime_package} (>= ${version})
 EOF
 
 cat > "${dev_package_root}/DEBIAN/control" <<EOF
@@ -190,15 +190,15 @@ test -f "${dev_package_root}/usr/include/xgc/adapter/v1/adapter.pb.h"
 test -f "${dev_package_root}/usr/include/xgc/adapter/v1/adapter.grpc.pb.h"
 test -L "${dev_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so"
 test -L "${dev_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so"
-test ! -e "${dev_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.1"
-test ! -e "${dev_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.1"
+test ! -e "${dev_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.2"
+test ! -e "${dev_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.2"
 test -f "${dev_package_root}/usr/lib/${multiarch}/cmake/xgc2_adapter_runtime_client/xgc2_adapter_runtime_clientConfig.cmake"
 test -f "${dev_package_root}/usr/lib/${multiarch}/pkgconfig/xgc2-adapter-runtime-client.pc"
 test ! -e "${runtime_package_root}/usr/include"
 test ! -e "${runtime_package_root}/usr/lib/${multiarch}/cmake"
 test ! -e "${runtime_package_root}/usr/lib/${multiarch}/pkgconfig"
-test -L "${runtime_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.1"
-test -L "${runtime_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.1"
+test -L "${runtime_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.2"
+test -L "${runtime_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.2"
 test -f "${runtime_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so.${library_version}"
 test -f "${runtime_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_protocol.so.${library_version}"
 test ! -e "${runtime_package_root}/usr/lib/${multiarch}/libxgc2_adapter_runtime_client.so"

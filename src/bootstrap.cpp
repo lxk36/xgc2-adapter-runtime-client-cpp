@@ -91,17 +91,6 @@ bool ValidateEndpointShape(const xgc::adapter::v1::CapabilityEndpointContract& e
       endpoint.default_timeout_ms() > endpoint.maximum_timeout_ms()) {
     return ShapeFail(error, "endpoint timeouts must be positive and ordered");
   }
-  if (endpoint.volatile_supported() &&
-      (!unary ||
-       endpoint.side_effect_class() != xgc::adapter::v1::SIDE_EFFECT_CLASS_IDEMPOTENT ||
-       endpoint.idempotency_mode() !=
-           xgc::adapter::v1::IDEMPOTENCY_MODE_NOT_SUPPORTED ||
-       endpoint.cancellation_supported() || !endpoint.deadline_required())) {
-    return ShapeFail(
-        error,
-        "volatile endpoint must be a deadline-bound idempotent unary without "
-        "invocation idempotency or cancellation");
-  }
   const auto& limits = endpoint.limits();
   if (limits.maximum_request_bytes() == 0 || limits.maximum_response_bytes() == 0 ||
       limits.maximum_concurrency() == 0) {
@@ -146,7 +135,7 @@ bool Client::Impl::ValidateConfig(std::string* error) const {
         "trusted definition/build/manifest/software/token/SDK identity is required");
   }
   if (registration.runtime_link_protocol_version() != kRuntimeLinkProtocolVersion) {
-    return Fail(error, "Runtime SDK 0.5 requires protocol version 2 exclusively");
+    return Fail(error, "Runtime SDK requires protocol version 2 exclusively");
   }
   if (config_.initial_spec().instance_id() != registration.instance_id() ||
       config_.initial_spec().process_generation() !=

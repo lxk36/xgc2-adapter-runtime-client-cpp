@@ -107,7 +107,7 @@ jobs:
                 protobuf-compiler protobuf-compiler-grpc
               ./.xgc2/scripts/build_deb.sh
               apt-get install -y \
-                ./debs/libxgc2-adapter-runtime-client1_*.deb \
+                ./debs/libxgc2-adapter-runtime-client2_*.deb \
                 ./debs/libxgc2-adapter-runtime-client-dev_*.deb
               ./.xgc2/scripts/smoke_test_installed.sh
             '

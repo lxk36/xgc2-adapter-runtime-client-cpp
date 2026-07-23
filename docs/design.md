@@ -99,6 +99,8 @@ terminal. Admission reserves a terminal identity slot and worst-case frame
 bytes before a handler can run. Terminal unary/operation frames are cached by
 work ID plus request digest without an eviction path. Identical redelivery
 replays the result; different content reusing an ID is a protocol violation.
+All unary and operation work uses this durable replay path; no dispatch can
+bypass the terminal reservation or retained identity.
 The cache is session-local rather than pair-local, so redelivery after a
 transport replacement cannot rerun a completed non-idempotent native
 operation.
