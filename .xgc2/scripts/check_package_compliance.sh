@@ -95,8 +95,28 @@ apt_distributions="$(
 
 grep -q '^id: libxgc2-adapter-runtime-client-dev$' "${metadata}"
 grep -q '^kind: toolchain-apt$' "${metadata}"
-grep -q '^    - libxgc2-adapter-runtime-client2$' "${metadata}"
-grep -q '^    xgc2-protobuf: rebuild$' "${metadata}"
+if ! awk '
+  $0 == "  packages:" { in_packages = 1; next }
+  in_packages && /^  [^[:space:]][^:]*:/ { exit }
+  in_packages && /^[[:space:]]*-[[:space:]]+libxgc2-adapter-runtime-client2[[:space:]]*$/ {
+    found = 1
+  }
+  END { exit(found ? 0 : 1) }
+' "${metadata}"; then
+  echo "apt.packages must contain libxgc2-adapter-runtime-client2" >&2
+  exit 1
+fi
+if ! awk '
+  $0 == "  dependency_policy:" { in_policy = 1; next }
+  in_policy && /^  [^[:space:]][^:]*:/ { exit }
+  in_policy && /^[[:space:]]*xgc2-protobuf:[[:space:]]+rebuild[[:space:]]*$/ {
+    found = 1
+  }
+  END { exit(found ? 0 : 1) }
+' "${metadata}"; then
+  echo "release.dependency_policy must rebuild xgc2-protobuf" >&2
+  exit 1
+fi
 for workflow in .github/workflows/ci.yml .github/workflows/release.yml; do
   docker_builds="$(grep -c 'docker run --rm' "${workflow}")"
   protobuf_ref_forwards="$(grep -c -- '-e XGC2_PROTOBUF_SOURCE_REF' "${workflow}")"
@@ -123,18 +143,20 @@ for distribution in "${distributions[@]}"; do
     exit 1
   fi
 done
-grep -q '^version: 0.6.0-2$' "${metadata}"
-grep -q '^project(xgc2_adapter_runtime_client VERSION 0.6.0 LANGUAGES CXX)$' \
+semantic_version="${product_version%-*}"
+IFS='.' read -r version_major version_minor version_patch <<< "${semantic_version}"
+
+grep -Fqx "project(xgc2_adapter_runtime_client VERSION ${semantic_version} LANGUAGES CXX)" \
   CMakeLists.txt
-grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_MAJOR 0$' \
+grep -Fqx "#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_MAJOR ${version_major}" \
   include/xgc2/adapter_runtime/version.hpp
-grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_MINOR 6$' \
+grep -Fqx "#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_MINOR ${version_minor}" \
   include/xgc2/adapter_runtime/version.hpp
-grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_PATCH 0$' \
+grep -Fqx "#define XGC2_ADAPTER_RUNTIME_CLIENT_VERSION_PATCH ${version_patch}" \
   include/xgc2/adapter_runtime/version.hpp
 grep -q '^#define XGC2_ADAPTER_RUNTIME_CLIENT_ABI_VERSION 2$' \
   include/xgc2/adapter_runtime/version.hpp
-grep -q '^constexpr const char\* kClientVersion = "0.6.0";$' \
+grep -Fqx "constexpr const char* kClientVersion = \"${semantic_version}\";" \
   include/xgc2/adapter_runtime/version.hpp
 if [[ "$(grep -c '^  SOVERSION 2$' CMakeLists.txt)" -ne 2 ]]; then
   echo "both public shared libraries must expose ABI SONAME 2" >&2
