@@ -157,6 +157,11 @@ for workflow in .github/workflows/ci.yml .github/workflows/release.yml; do
     exit 1
   fi
 done
+grep -Fq 'XGC2_PROTOBUF_STANDALONE_SOURCE_REF' .github/workflows/release.yml
+if grep -Fq 'XGC2_PROTOBUF_SOURCE_REF' .github/workflows/release.yml; then
+  echo "release workflow retains the retired protobuf source-ref variable" >&2
+  exit 1
+fi
 grep -Fq 'apt-cache policy xgc2-protobuf-dev' .xgc2/scripts/install_protobuf_dependency.sh
 grep -Fq 'XGC2_APT_OVERLAY_URL' .xgc2/scripts/install_protobuf_dependency.sh
 grep -Fq 'XGC2_PROTOBUF_PROTOCOL_VERSION' .xgc2/scripts/build_deb.sh

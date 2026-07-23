@@ -73,7 +73,7 @@ jobs:
           fi
           ./.xgc2/scripts/check_package_compliance.sh
           source .xgc2/dependencies/xgc2-protobuf.env
-          [[ "${XGC2_PROTOBUF_SOURCE_REF}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${XGC2_PROTOBUF_STANDALONE_SOURCE_REF}" =~ ^[0-9a-f]{40}$ ]]
 
   cpp-quality:
     if: ${{ inputs.run_cpp_quality || inputs.run_source_tests }}
