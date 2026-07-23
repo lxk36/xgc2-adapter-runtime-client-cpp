@@ -190,8 +190,8 @@ place.
 
 ## Build and test
 
-Point CMake at an exact `xgc2-protobuf-dev` 0.5.0-3 prefix containing Runtime
-Link protocol v2:
+Point CMake at an `xgc2-protobuf-dev` prefix from the supported RuntimeLink
+protocol 0.5.0 line:
 
 ```bash
 cmake -S . -B build \

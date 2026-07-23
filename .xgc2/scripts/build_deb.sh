@@ -39,16 +39,14 @@ if [[ ! "${library_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "invalid shared-library version derived from ${base_version}" >&2
   exit 1
 fi
-protobuf_deb_version="${XGC2_PROTOBUF_DEB_VERSION:-$(
-  dpkg-query -W -f='${Version}' xgc2-protobuf-dev 2>/dev/null
-)}"
+protobuf_deb_version="$(dpkg-query -W -f='${Version}' xgc2-protobuf-dev 2>/dev/null)"
 if [[ -z "${protobuf_deb_version}" ]]; then
   echo "xgc2-protobuf-dev must be installed before packaging" >&2
   exit 1
 fi
-expected_protobuf_deb_version="${XGC2_PROTOBUF_VERSION}~${distribution}"
-if [[ "${protobuf_deb_version}" != "${expected_protobuf_deb_version}" ]]; then
-  echo "xgc2-protobuf-dev must be exactly ${expected_protobuf_deb_version}; installed/selected ${protobuf_deb_version}" >&2
+protobuf_protocol_pattern="${XGC2_PROTOBUF_PROTOCOL_VERSION//./\\.}"
+if [[ ! "${protobuf_deb_version}" =~ ^${protobuf_protocol_pattern}-[0-9]+~${distribution}$ ]]; then
+  echo "xgc2-protobuf-dev must use the ${XGC2_PROTOBUF_PROTOCOL_VERSION} protocol line for ${distribution}; installed ${protobuf_deb_version}" >&2
   exit 1
 fi
 if [[ "${ALLOW_UNSCOPED_BINARY_DEB_VERSION:-0}" != "1" ]]; then

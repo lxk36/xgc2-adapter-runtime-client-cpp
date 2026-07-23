@@ -34,20 +34,20 @@ for file in "${required[@]}"; do
 done
 
 (
-  unset XGC2_PROTOBUF_VERSION XGC2_PROTOBUF_SOURCE_REF
+  unset XGC2_PROTOBUF_PROTOCOL_VERSION XGC2_PROTOBUF_STANDALONE_SOURCE_REF
   # shellcheck source=../dependencies/xgc2-protobuf.env
   source .xgc2/dependencies/xgc2-protobuf.env
-  if [[ ! "${XGC2_PROTOBUF_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
-    echo "invalid locked protobuf product version: ${XGC2_PROTOBUF_VERSION}" >&2
+  if [[ ! "${XGC2_PROTOBUF_PROTOCOL_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "invalid protobuf protocol version: ${XGC2_PROTOBUF_PROTOCOL_VERSION}" >&2
     exit 1
   fi
-  if [[ ! "${XGC2_PROTOBUF_SOURCE_REF}" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "protobuf dependency must be a full source SHA" >&2
+  if [[ ! "${XGC2_PROTOBUF_STANDALONE_SOURCE_REF}" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "standalone protobuf dependency must be a full source SHA" >&2
     exit 1
   fi
-  if [[ "${XGC2_PROTOBUF_VERSION}" != "0.5.0-3" ||
-        "${XGC2_PROTOBUF_SOURCE_REF}" != "6fd0781937613368bc4a3e4cb1a6fd6d03ead826" ]]; then
-    echo "protobuf dependency lock is not the durable-only 0.5.0-3 contract" >&2
+  if [[ "${XGC2_PROTOBUF_PROTOCOL_VERSION}" != "0.5.0" ||
+        "${XGC2_PROTOBUF_STANDALONE_SOURCE_REF}" != "6fd0781937613368bc4a3e4cb1a6fd6d03ead826" ]]; then
+    echo "protobuf standalone source is not the supported RuntimeLink protocol contract" >&2
     exit 1
   fi
 )
@@ -88,66 +88,86 @@ while IFS= read -r source; do
   fi
 done < <(find test -type f \( -name '*.hpp' -o -name '*.cpp' \) | sort)
 metadata=.xgc2/product.yml
-product_version="$(sed -n 's/^version:[[:space:]]*//p' "${metadata}")"
-apt_distributions="$(
-  sed -n '/^apt:$/,/^[^[:space:]]/s/^  distribution:[[:space:]]*//p' "${metadata}"
-)"
+metadata_values="$(python3 - "${metadata}" <<'PY'
+import sys
 
-grep -q '^id: libxgc2-adapter-runtime-client-dev$' "${metadata}"
-grep -q '^kind: toolchain-apt$' "${metadata}"
-if ! awk '
-  $0 == "  packages:" { in_packages = 1; next }
-  in_packages && /^  [^[:space:]][^:]*:/ { exit }
-  in_packages && /^[[:space:]]*-[[:space:]]+libxgc2-adapter-runtime-client2[[:space:]]*$/ {
-    found = 1
-  }
-  END { exit(found ? 0 : 1) }
-' "${metadata}"; then
-  echo "apt.packages must contain libxgc2-adapter-runtime-client2" >&2
-  exit 1
-fi
-if ! awk '
-  $0 == "  dependency_policy:" { in_policy = 1; next }
-  in_policy && /^  [^[:space:]][^:]*:/ { exit }
-  in_policy && /^[[:space:]]*xgc2-protobuf:[[:space:]]+rebuild[[:space:]]*$/ {
-    found = 1
-  }
-  END { exit(found ? 0 : 1) }
-' "${metadata}"; then
-  echo "release.dependency_policy must rebuild xgc2-protobuf" >&2
-  exit 1
-fi
+try:
+    import yaml
+except ImportError as exc:
+    raise SystemExit(f"PyYAML is required for product metadata validation: {exc}")
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    product = yaml.safe_load(stream)
+
+if not isinstance(product, dict):
+    raise SystemExit("product metadata must be a mapping")
+if product.get("schema") != "xgc2.product.v1":
+    raise SystemExit("product metadata schema mismatch")
+if product.get("id") != "libxgc2-adapter-runtime-client-dev":
+    raise SystemExit("product metadata identity mismatch")
+if product.get("kind") != "toolchain-apt":
+    raise SystemExit("product metadata kind mismatch")
+
+version = product.get("version")
+if not isinstance(version, str) or not version:
+    raise SystemExit("product metadata version is missing")
+
+apt = product.get("apt")
+if not isinstance(apt, dict):
+    raise SystemExit("product metadata apt section is missing")
+distribution_text = apt.get("distribution")
+if not isinstance(distribution_text, str) or not distribution_text:
+    raise SystemExit("product metadata apt.distribution is missing")
+distributions = [item.strip() for item in distribution_text.split(",") if item.strip()]
+if not distributions:
+    raise SystemExit("product metadata apt.distribution is empty")
+packages = apt.get("packages")
+if not isinstance(packages, list) or "libxgc2-adapter-runtime-client2" not in packages:
+    raise SystemExit("apt.packages must contain libxgc2-adapter-runtime-client2")
+
+release = product.get("release")
+if not isinstance(release, dict):
+    raise SystemExit("product metadata release section is missing")
+policy = release.get("dependency_policy")
+if not isinstance(policy, dict) or policy.get("xgc2-protobuf") != "rebuild":
+    raise SystemExit("release.dependency_policy must rebuild xgc2-protobuf")
+apt_versions = release.get("apt_versions")
+if not isinstance(apt_versions, dict):
+    raise SystemExit("release.apt_versions is missing")
+for distribution in distributions:
+    expected = f"{version}~{distribution}"
+    if apt_versions.get(distribution) != expected:
+        raise SystemExit(
+            f"release.apt_versions.{distribution} must be {expected}"
+        )
+
+print(version)
+PY
+)"
+product_version="${metadata_values}"
 for workflow in .github/workflows/ci.yml .github/workflows/release.yml; do
   docker_builds="$(grep -c 'docker run --rm' "${workflow}")"
-  protobuf_lock_loads="$(grep -c './.xgc2/scripts/install_protobuf_dependency.sh' "${workflow}")"
-  if [[ "${protobuf_lock_loads}" -ne "${docker_builds}" ]]; then
-    echo "${workflow} must load the protobuf product lock in every build container" >&2
+  protobuf_resolver_invocations="$(grep -c './.xgc2/scripts/install_protobuf_dependency.sh' "${workflow}")"
+  if [[ "${protobuf_resolver_invocations}" -ne "${docker_builds}" ]]; then
+    echo "${workflow} must resolve protobuf in every build container" >&2
     exit 1
   fi
-  if grep -Fq 'vars.XGC2_PROTOBUF_SOURCE_REF' "${workflow}" ||
-      grep -Fq -- '-e XGC2_PROTOBUF_SOURCE_REF' "${workflow}"; then
-    echo "${workflow} must not override the immutable protobuf product lock" >&2
+  if grep -Eq -- 'vars\.XGC2_PROTOBUF|-[[:space:]]*e[[:space:]]+XGC2_PROTOBUF' "${workflow}"; then
+    echo "${workflow} must not override protobuf dependency selection" >&2
     exit 1
   fi
 done
+grep -Fq 'apt-cache policy xgc2-protobuf-dev' .xgc2/scripts/install_protobuf_dependency.sh
+grep -Fq 'XGC2_APT_OVERLAY_URL' .xgc2/scripts/install_protobuf_dependency.sh
+grep -Fq 'XGC2_PROTOBUF_PROTOCOL_VERSION' .xgc2/scripts/build_deb.sh
+if grep -Fq 'XGC2_PROTOBUF_DEB_VERSION' .xgc2/scripts/build_deb.sh; then
+  echo "package build must derive the protobuf Debian revision from the installed dependency" >&2
+  exit 1
+fi
 if [[ ! "${product_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
   echo "product metadata version is missing or invalid: ${product_version:-<empty>}" >&2
   exit 1
 fi
-if [[ -z "${apt_distributions}" ]]; then
-  echo "product metadata apt.distribution is missing" >&2
-  exit 1
-fi
-
-IFS=',' read -r -a distributions <<< "${apt_distributions}"
-for distribution in "${distributions[@]}"; do
-  distribution="${distribution//[[:space:]]/}"
-  expected_apt_version="${product_version}~${distribution}"
-  if ! grep -Fqx "    ${distribution}: ${expected_apt_version}" "${metadata}"; then
-    echo "release.apt_versions.${distribution} must be ${expected_apt_version}" >&2
-    exit 1
-  fi
-done
 semantic_version="${product_version%-*}"
 IFS='.' read -r version_major version_minor version_patch <<< "${semantic_version}"
 
